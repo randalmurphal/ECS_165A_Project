@@ -26,9 +26,9 @@ class Table:
         self.name = name
         self.key = key
         self.num_columns = num_columns
-        self.page_directory = {}
+        self.page_directory = {} # needs to point to a page within a page range when given a certain RID
         self.index = Index(self)
-        self.actualTable = [[]*num_columns+4]
+        self.actualTable = [[]*(4+num_columns)]
 
         pass
 
