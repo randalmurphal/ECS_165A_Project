@@ -1,5 +1,6 @@
 from template.table import Table, Record
 from template.index import Index
+from template.page import Page
 
 
 class Query:
@@ -29,7 +30,14 @@ class Query:
     # Returns False if insert fails for whatever reason
     """
     def insert(self, *columns):
+
+        #inserting record ->  page
+        #create page
+        #add to table page directory
+
+        # self.table.page_directory
         schema_encoding = '0' * self.table.num_columns
+
         pass
 
     """
