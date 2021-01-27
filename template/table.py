@@ -28,7 +28,9 @@ class Table:
         self.num_columns = num_columns
         self.page_directory = {} # needs to point to a page within a page range when given a certain RID
         self.index = Index(self)
-        self.actualTable = [[]*(4+num_columns)]
+        self.actualTable = [                          \
+                               [[],[]]                        \ #This would be page range #1         
+                           ]
 
         pass
 
