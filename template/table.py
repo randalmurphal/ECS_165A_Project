@@ -28,7 +28,7 @@ class Table:
         self.num_columns = num_columns
         self.page_directory = {}
         self.index = Index(self)
-        self.table = [[]*num_columns+4]
+        self.actualTable = [[]*num_columns+4]
 
         pass
 
