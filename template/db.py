@@ -6,7 +6,7 @@ class Database():
         self.tables = []
 
         pass
-
+    # Not required for milestone1 (according to latest update from TA)
     def open(self, path):
         pass
 
