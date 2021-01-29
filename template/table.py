@@ -28,7 +28,12 @@ class Table:
         self.num_columns = num_columns
         self.page_directory = {} # needs to point to a page within a page range when given a certain RID
         self.index = Index(self)
-        self.actualTable = [  [  [[[]*(4+num_columns)]], [[[]*(4+num_columns)]] ] ]  \
+        self.dataStructure = [                                                       \  #table
+                             [                                                       \  #page range start
+                              [[[]*(4+num_columns)]], [[[]*(4+num_columns)]]         \  #set of base pages and set of tail pages
+                             ]                                                       \ 
+                             ]                                                       \
+                     
                              
         pass
 
