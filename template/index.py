@@ -14,7 +14,6 @@ class Index:
     """
 
     def locate(self, column, value):
-
         pass
 
     """

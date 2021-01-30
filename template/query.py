@@ -1,7 +1,6 @@
-from template.table import Table, Record
-from template.index import Index
-from template.page import Page
-
+from table import Table, Record
+from index import Index
+from conceptual_page import ConceptualPage
 
 class Query:
     """
@@ -29,17 +28,27 @@ class Query:
     # Return True upon succesful insertion
     # Returns False if insert fails for whatever reason
     """
+    # Tuple of columns(Key,Value)
     def insert(self, *columns):
-
-        #inserting record ->  page
-        #create page
-        #add to table page directory
-
-        # self.table.page_directory
         schema_encoding = '0' * self.table.num_columns
-
-        pass
-
+        dir_len = len(self.table.page_directory)
+        if dir_len == 0:
+            newPage = ConceptualPage()
+            # Add an iterator to add keys based off of page_directory length
+            self.table.page_directory[dir_len] = newPage
+        else:
+            # Go to most recent directory and insert pages here
+            self.table.page_directory[dir_len]
+        if newPage.
+        for page_cols in range (self.table.num_columns + 4):
+            # Add columns to conceptual page
+            newPage.add_column()
+        newRecord = Record(rid,key,columns)
+        if newPag
+        for i in range(len(columns)):  
+            # Add pages to the columns
+            newPage.pages[i+4].add_page(columns[i])
+        # Make a loop to populate the pages
     """
     # Read a record with specified key
     # :param key: the key value to select records based on
