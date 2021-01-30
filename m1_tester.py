@@ -17,7 +17,7 @@ seed(3562901)
 
 for i in range(0, 1000):
     key = 92106429 + randint(0, 9000)
-    while key in records:
+    while key in records: # Prevents duplicate keys
         key = 92106429 + randint(0, 9000)
     records[key] = [key, randint(0, 20), randint(0, 20), randint(0, 20), randint(0, 20)]
     query.insert(*records[key])

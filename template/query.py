@@ -4,7 +4,7 @@ from conceptual_page import ConceptualPage
 
 class Query:
     """
-    # Creates a Query object that can perform different queries on the specified table 
+    # Creates a Query object that can perform different queries on the specified table
     Queries that fail must return False
     Queries that succeed should return the result or True
     Any query that crashes (due to exceptions) should return False
@@ -38,16 +38,17 @@ class Query:
             self.table.page_directory[dir_len] = newPage
         else:
             # Go to most recent directory and insert pages here
-            self.table.page_directory[dir_len]
+            self.table.page_directory[dir_len] ### go to dir_len - (num_columns // 8) ??? if more than 8 num_columns ###
         if newPage.
-        for page_cols in range (self.table.num_columns + 4):
+		### Want to also iterate through each conceptual page in page directory, can change map to new conc page when overflow for insert ###
+        for page_cols in range (self.table.num_columns + 4): # If num_columns > 8, should be on diff conceptual pages
             # Add columns to conceptual page
             newPage.add_column()
         newRecord = Record(rid,key,columns)
         if newPag
-        for i in range(len(columns)):  
+        for i in range(len(columns)):
             # Add pages to the columns
-            newPage.pages[i+4].add_page(columns[i])
+            newPage.pages[i+4].add_page(columns[i]) ### Only add a new page if previous page is full (num_records % 512 == 0)
         # Make a loop to populate the pages
     """
     # Read a record with specified key
@@ -69,8 +70,8 @@ class Query:
         pass
 
     """
-    :param start_range: int         # Start of the key range to aggregate 
-    :param end_range: int           # End of the key range to aggregate 
+    :param start_range: int         # Start of the key range to aggregate
+    :param end_range: int           # End of the key range to aggregate
     :param aggregate_columns: int  # Index of desired column to aggregate
     # this function is only called on the primary key.
     # Returns the summation of the given range upon success
@@ -95,4 +96,3 @@ class Query:
             u = self.update(key, *updated_columns)
             return u
         return False
-

@@ -17,13 +17,10 @@ class ConceptualPage:
         return False
 
     def add_column(self):
-        self.pages.append([])
+        self.pages.append([]) 
 
     def add_page(self, page):
         self.pages.append(Page())
-    
+
     def update_RID(self):
         pass
-
-
-
