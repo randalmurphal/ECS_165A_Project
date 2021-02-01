@@ -1,9 +1,11 @@
-from template.config import *
+from config import *
 
+def int_to_bytes(val, num_bytes):
+	return [(val & (0xff << pos*8)) >> pos*8 for pos in reversed(range(num_bytes))]
 
 class Page:
 
-    def init(self):
+    def __init__(self):
         self.num_records = 0
         self.data = bytearray(4096)
 
@@ -14,9 +16,25 @@ class Page:
         return True
 
     def write(self, value):
-        # Write into the page the value
-        self.data[self.num_records] = value
-        #1) Convert to bytes
-        # Put the value into the next available space into self.data(this is an array of bytes)
+        offset = self.num_records * 8
+        for i in int_to_bytes(value, 8):
+            self.data[offset] = i
+            offset = offset + 1
         self.num_records += 1
         return True
+
+        # # Write into the page the value
+        # self.data[self.num_records] = value
+        # #1) Convert to bytes
+        # # Put the value into the next available space into self.data(this is an array of bytes)
+        # self.num_records += 1
+        # return True
+
+    def retrieve(self, record_num):
+        offset = record_num * 8
+        temp = [0,0,0,0,0,0,0,0]
+        for i in range(0,8):
+            temp[i] = self.data[offset]
+            offset = offset+1
+        #print(temp)
+        return int.from_bytes(temp,byteorder='big')

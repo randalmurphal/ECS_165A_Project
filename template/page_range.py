@@ -4,17 +4,15 @@ class PageRange:
     def __init__(self):
         # 1st index is for base pages
         # 2nd index is for tail pages
-        self.Range = [[],[]]
+        self.range = [[],[]]
         self.num_base_pages = 0
 
     def return_page(self):
         pass
 
     def full(self):
-        if self.num_base_pages == 16:
-            return True
-        else:
-            return False
+        return self.num_base_pages == 16
+		
     def append_base_page(self,conceptual_page):
         self.num_base_pages += 1
         self.Range[0].append(conceptual_page)
@@ -25,4 +23,3 @@ class PageRange:
 
     def merge(self,pages):
         pass
-

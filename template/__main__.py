@@ -1,5 +1,5 @@
-from template.db import Database
-from template.query import Query
+from db import Database
+from query import Query
 from time import process_time
 from random import choice, randrange
 
@@ -12,8 +12,8 @@ keys = []
 insert_time_0 = process_time()
 for i in range(0, 10000):
 	key = 906659671 + i
-    query.insert(key, 93, 0, 0, 0)
-    keys.append(key)
+	query.insert(key, 93, 0, 0, 0)
+	keys.append(key)
 insert_time_1 = process_time()
 
 print("Inserting 10k records took:  \t\t\t", insert_time_1 - insert_time_0)

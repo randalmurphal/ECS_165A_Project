@@ -1,11 +1,14 @@
 from config import *
-from page.py import Page
+from page import Page
 # 4096 total records
 class ConceptualPage:
 
-    def __init__(self):
+    def __init__(self, columns):
         self.pages = []
         self.num_records = 0
+
+        for i in range(len(columns) + 4):
+            self.add_column()
 
     def update_num_records(self,page):
         self.num_records += 1
@@ -17,10 +20,10 @@ class ConceptualPage:
         return False
 
     def add_column(self):
-        self.pages.append([]) 
+        self.pages.append([Page()])
 
-    def add_page(self, page):
-        self.pages.append(Page())
+    # def add_page(self, page):
+    #     self.pages.append(Page())
 
     def update_RID(self):
         pass

@@ -1,6 +1,8 @@
 from table import Table, Record
 from index import Index
 from conceptual_page import ConceptualPage
+from page_range import PageRange
+from page import Page
 
 class Query:
     """
@@ -30,26 +32,41 @@ class Query:
     """
     # Tuple of columns(Key,Value)
     def insert(self, *columns):
-        schema_encoding = '0' * self.table.num_columns
-        dir_len = len(self.table.page_directory)
-        if dir_len == 0:
-            newPage = ConceptualPage()
-            # Add an iterator to add keys based off of page_directory length
-            self.table.page_directory[dir_len] = newPage
+        available_RIDS = [0]
+
+        new_page_range   = self.table.RID_count % 65536 == 0
+        page_range_index = self.table.RID_count // 65536
+        new_base_page    = self.table.RID_count % 4096 == 0
+        base_page_index  = (self.table.RID_count % 65536) // 4096
+        new_page         = self.table.RID_count % 512 == 0
+        page_index       = (self.table.RID_count % 4096) // 512
+
+        if new_page_range:
+		    # create new page range
+            new_range = PageRange()
+            new_base  = ConceptualPage(columns)
+            new_range.range[0].append(new_base)
+            self.table.page_directory.append(new_range)
+            for i, col in enumerate(columns):
+            	new_base.pages[i+4][page_index].write(col)
         else:
-            # Go to most recent directory and insert pages here
-            self.table.page_directory[dir_len] ### go to dir_len - (num_columns // 8) ??? if more than 8 num_columns ###
-        if newPage.
-		### Want to also iterate through each conceptual page in page directory, can change map to new conc page when overflow for insert ###
-        for page_cols in range (self.table.num_columns + 4): # If num_columns > 8, should be on diff conceptual pages
-            # Add columns to conceptual page
-            newPage.add_column()
-        newRecord = Record(rid,key,columns)
-        if newPag
-        for i in range(len(columns)):
-            # Add pages to the columns
-            newPage.pages[i+4].add_page(columns[i]) ### Only add a new page if previous page is full (num_records % 512 == 0)
-        # Make a loop to populate the pages
+            if new_base_page:
+            	new_base = ConceptualPage(columns)
+            	self.table.page_directory[page_range_index].range[0].append(new_base)
+            	for i, col in enumerate(columns):
+            		new_base.pages[i+4][page_index].write(col)
+            else:
+                if new_page:
+		            # append new page to current conceptualpage
+                    base_pg = self.table.page_directory[page_range_index].range[0][base_page_index]
+                    for i in range(len(base_pg.pages)):
+                        base_pg.pages[i].append(Page())
+
+                    for i, col in enumerate(columns):
+                        base_pg.pages[i+4][page_index].write(col)
+        self.table.RID_count += 1
+        return True
+
     """
     # Read a record with specified key
     # :param key: the key value to select records based on
@@ -59,6 +76,7 @@ class Query:
     # Assume that select will never be called on a key that doesn't exist
     """
     def select(self, key, column, query_columns):
+        # column = which column to search for key
         pass
 
     """
@@ -67,6 +85,7 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
+        # Create tail pages -- TODO: 
         pass
 
     """
