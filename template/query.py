@@ -4,6 +4,8 @@ from conceptual_page import ConceptualPage
 from page_range import PageRange
 from page import Page
 
+import time
+
 class Query:
     """
     # Creates a Query object that can perform different queries on the specified table
@@ -25,6 +27,10 @@ class Query:
     def delete(self, key):
         pass
 
+    def add_meta(self, new_base, page_index, values):
+        for i, value in enumerate(values):
+            new_base.pages[i][page_index].write(value)
+
     """
     # Insert a record with specified columns
     # Return True upon succesful insertion
@@ -41,29 +47,48 @@ class Query:
         new_page         = self.table.RID_count % 512 == 0
         page_index       = (self.table.RID_count % 4096) // 512
 
+        new_base  = ConceptualPage(columns)
+        new_range = PageRange()
+
         if new_page_range:
 		    # create new page range
-            new_range = PageRange()
-            new_base  = ConceptualPage(columns)
-            new_range.range[0].append(new_base)
+            new_range.append_base_page(new_base) # [0].append(new_base)
             self.table.page_directory.append(new_range)
             for i, col in enumerate(columns):
             	new_base.pages[i+4][page_index].write(col)
+
+            values = [0, self.table.RID_count, 0, 0]
+            self.add_meta(new_base, page_index, values)
         else:
             if new_base_page:
-            	new_base = ConceptualPage(columns)
-            	self.table.page_directory[page_range_index].range[0].append(new_base)
-            	for i, col in enumerate(columns):
-            		new_base.pages[i+4][page_index].write(col)
+                self.table.page_directory[page_range_index].append_base_page(new_base)
+
+                values = [0, self.table.RID_count, 0, 0]
+                self.add_meta(new_base, page_index, values)
+
+                for i, col in enumerate(columns):
+                	new_base.pages[i+4][page_index].write(col)
             else:
                 if new_page:
 		            # append new page to current conceptualpage
-                    base_pg = self.table.page_directory[page_range_index].range[0][base_page_index]
-                    for i in range(len(base_pg.pages)):
-                        base_pg.pages[i].append(Page())
+                    new_base = self.table.page_directory[page_range_index].range[0][base_page_index]
+                    for i in range(len(new_base.pages)):
+                        new_base.pages[i].append(Page())
 
                     for i, col in enumerate(columns):
-                        base_pg.pages[i+4][page_index].write(col)
+                        new_base.pages[i+4][page_index].write(col)
+
+                    values = [0, self.table.RID_count, 0, 0]
+                    self.add_meta(new_base, page_index, values)
+                else:
+                    new_base = self.table.page_directory[page_range_index].range[0][base_page_index]
+
+                    for i, col in enumerate(columns):
+                        new_base.pages[i+4][page_index].write(col)
+
+                    values = [0, self.table.RID_count, 0, 0]
+                    self.add_meta(new_base, page_index, values)
+
         self.table.RID_count += 1
         return True
 
@@ -76,8 +101,27 @@ class Query:
     # Assume that select will never be called on a key that doesn't exist
     """
     def select(self, key, column, query_columns):
-        # column = which column to search for key
-        pass
+        # table -> page_directory -> page range -> conceptual page -> physical page -> record index
+        ind = Index(self.table)
+        locations = ind.locate(column, key)
+        records = []
+
+        for location in locations:
+            p_range = location[0]
+            base_pg = location[1]
+            page    = location[2]
+            record  = location[3]
+            rid     = self.table.page_directory[p_range].range[0][base_pg].pages[1][page].retrieve(record)
+            key     = self.table.page_directory[p_range].range[0][base_pg].pages[4][page].retrieve(record)
+
+            columns = []
+            for i, col in enumerate(query_columns[1:]):
+                if col:
+                    columns.append(self.table.page_directory[p_range].range[0][base_pg].pages[i+5][page].retrieve(record))
+
+            rec = Record(rid, key, columns)
+            records.append(rec)
+        return records
 
     """
     # Update a record with specified key and columns
@@ -85,7 +129,7 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
-        # Create tail pages -- TODO: 
+        # Create tail pages -- TODO:
         pass
 
     """

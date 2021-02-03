@@ -1,5 +1,6 @@
 from db import Database
 from query import Query
+from index import Index
 from time import process_time
 from random import choice, randrange
 

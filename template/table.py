@@ -4,7 +4,6 @@ from time import time
 # from page_range import PageRange
 
 # These are indexes
-
 INDIRECTION_COLUMN = 0
 RID_COLUMN = 1
 TIMESTAMP_COLUMN = 2

@@ -12,14 +12,14 @@ class PageRange:
 
     def full(self):
         return self.num_base_pages == 16
-		
+
     def append_base_page(self,conceptual_page):
         self.num_base_pages += 1
-        self.Range[0].append(conceptual_page)
+        self.range[0].append(conceptual_page)
 
     def append_tail_page(self,conceptual_page):
         # map our base pages to tail pages
-        self.Range[1].append(conceptual_page)
+        self.range[1].append(conceptual_page)
 
     def merge(self,pages):
         pass
