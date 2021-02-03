@@ -32,15 +32,27 @@ class Index:
     """
 
     def locate_range(self, begin, end, column):
-        rid_vals = []
-        for range in self.table.page_directory:
-            for base_pg in range.range[0]:
-                for i in range(len(base_pg)):
-                    for l in range(page.num_records):
-                        val = page.retrieve(l)
-                        if val >= begin and val <= end:
-                            rid_vals.append(base_pg[1].retrieve(i))
-        return rid_vals
+        vals = []
+        started = False
+        for p_range in self.table.page_directory:
+            for base_pg in p_range.range[0]:
+                for i, page in enumerate(base_pg.pages[4]):
+                    for j in range(page.num_records):
+                        val    = page.retrieve(j)
+                        # start  = min(begin, end)
+                        # finish = max(begin, end)
+                        # print(start, finish)
+                        if val == begin:
+                            started = True
+                        if started:
+                            vals.append(base_pg.pages[column+4][i].retrieve(j))
+                        if val == end:
+                            return vals
+                    # for l in range(page.num_records):
+                    #     val = page.retrieve(l)
+                    #     if val >= begin and val <= end:
+                    #         rid_vals.append(base_pg[1].retrieve(i))
+        return vals
 
     """
     # optional: Create index on specific column

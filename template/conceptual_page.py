@@ -1,4 +1,4 @@
-from config import *
+# from config import *
 from page import Page
 # 4096 total records
 class ConceptualPage:

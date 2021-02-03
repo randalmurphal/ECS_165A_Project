@@ -135,13 +135,15 @@ class Query:
     """
     :param start_range: int         # Start of the key range to aggregate
     :param end_range: int           # End of the key range to aggregate
-    :param aggregate_columns: int  # Index of desired column to aggregate
+    :param aggregate_columns: int   # Index of desired column to aggregate
     # this function is only called on the primary key.
     # Returns the summation of the given range upon success
     # Returns False if no record exists in the given range
     """
     def sum(self, start_range, end_range, aggregate_column_index):
-        pass
+        ind = Index(self.table)
+        values = ind.locate_range(start_range, end_range, aggregate_column_index)
+        return sum(values)
 
     """
     incremenets one column of the record

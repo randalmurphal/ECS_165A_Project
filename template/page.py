@@ -1,4 +1,4 @@
-from config import *
+# from config import *
 
 def int_to_bytes(val, num_bytes):
 	return [(val & (0xff << pos*8)) >> pos*8 for pos in reversed(range(num_bytes))]
