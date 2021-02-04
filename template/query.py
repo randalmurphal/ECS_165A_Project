@@ -142,10 +142,11 @@ class Query:
                 # print(len(columns))
                 # print(len(tail_page[4:]))
                 for i, col in enumerate(tail_page[4:]):
-                    # if base_schema[1:][i]:
                     value = col[page_i].retrieve(tail_rid)
-                    print("value:", value)
-                    columns[i] = col[page_i].retrieve(tail_rid)
+                    if value == MAX_INT:
+                        columns[i] = base_pages[i+4][page].retrieve(record)
+                    else:
+                        columns[i] = col[page_i].retrieve(tail_rid)
 
             rec = Record(rid, key, columns)
             records.append(rec)
@@ -182,6 +183,7 @@ class Query:
 
         tail_RID = self.table.tail_RID
         prev_tail_RID = tail_RID
+        # Base Page stuff
         if record_rid in indirection.keys(): # if update has happened already (ie tail page exists for record)
             tail = indirection[record_rid]
             tail_page_i  = tail // 4096
@@ -199,7 +201,7 @@ class Query:
             prev_tail_RID = tail
         else: # no updates for that record yet
             for col in columns:
-                if col:
+                if col != None:
                     cols.append(col)
                 else:
                     cols.append(MAX_INT)
@@ -221,10 +223,9 @@ class Query:
         tail_pages[-1].pages[4][tail_page_i].write(key)
         # write column values into new tail page record
         # print(len(tail_pages[-1].pages[5:]))
-        print("len cols:", len(cols))
-        print("cols:", cols)
         for i, col in enumerate(tail_pages[-1].pages[5:]):
-            col[tail_page_i].write(cols[i])
+            print("cols:", cols[i+1])
+            col[tail_page_i].write(cols[i+1])
         # Update Indirection for tail page
         tail_indirection = tail_pages[-1].pages[0]
         tail_indirection[tail_RID] = prev_tail_RID
@@ -233,8 +234,8 @@ class Query:
         # update base page schema encoding
         for i, col in enumerate(columns):
             if col:
-                base_schema[i] = col
-                tail_schema[i] = col
+                base_schema[i] = 1
+                tail_schema[i] = 1
 
         return True
 

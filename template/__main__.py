@@ -52,28 +52,39 @@ for key in records:
 		updated_columns[i] = value
 		original = records[key].copy()
 		records[key][i] = value
-		print("original:", original)
-		print("updated:", *updated_columns)
 		query.update(key, *updated_columns)
 		record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
 		# print(record.columns)
 		error = False
+		print("updated_columns:", updated_columns)
 		for j, column in enumerate(record.columns):
+			# print("records:", records[key][j])
+			# print("column:", column)
 			if column != records[key][j]:
 				error = True
-		# if error:
-		# 	print('update error on', original, 'and', updated_columns, ':', record, ', correct:', records[key])
-		# else:
-		# 	print('update on', original, 'and', updated_columns, ':', record)
+		if error:
+			print('update error on', original, 'and', updated_columns, ':', record.columns, ', correct:', records[key])
+		else:
+			print('update on', original, 'and', updated_columns, ':', record.columns)
 		updated_columns[i] = None
 update_time_1 = process_time()
 
 # # Measuring Select Performance
 # select_time_0 = process_time()
-# for i in range(0, 10000):
+# for i in range(0, 1000):
 #     query.select(choice(keys), 0, [1, 1, 1, 1, 1])
 # select_time_1 = process_time()
 # print("Selecting 10k records took:  \t\t\t", select_time_1 - select_time_0)
+# for key in records:
+#     record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
+#     error = False
+#     for i, column in enumerate(record.columns):
+#         if column != records[key][i]:
+#             error = True
+#     if error:
+#         print('select error on', key, ':', record, ', correct:', records[key])
+#     else:
+#         print('select on', key, ':', record)
 
 # # Measuring Aggregate Performance
 # agg_time_0 = process_time()
