@@ -17,7 +17,7 @@ insert_time_0 = process_time()
 # 	query.insert(key, 93, 0, 0, 0)
 # 	records[key] = [key, 93, 0, 0, 0]
 # 	keys.append(key)
-for i in range(0, 10000):
+for i in range(0, 100):
 	key = 92106429 + randint(0, 11000)
 	while key in records: # Prevents duplicate keys
 		key = 92106429 + randint(0, 9000)
@@ -56,7 +56,6 @@ for key in records:
 		record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
 		# print(record.columns)
 		error = False
-		print("updated_columns:", updated_columns)
 		for j, column in enumerate(record.columns):
 			# print("records:", records[key][j])
 			# print("column:", column)
@@ -64,27 +63,28 @@ for key in records:
 				error = True
 		if error:
 			print('update error on', original, 'and', updated_columns, ':', record.columns, ', correct:', records[key])
-		else:
-			print('update on', original, 'and', updated_columns, ':', record.columns)
+		# else:
+		# 	print('update on', original, 'and', updated_columns, ':', record.columns)
 		updated_columns[i] = None
 update_time_1 = process_time()
+print("Updating 10k records took:  \t\t\t", update_time_1 - update_time_0)
 
-# # Measuring Select Performance
-# select_time_0 = process_time()
-# for i in range(0, 1000):
-#     query.select(choice(keys), 0, [1, 1, 1, 1, 1])
-# select_time_1 = process_time()
-# print("Selecting 10k records took:  \t\t\t", select_time_1 - select_time_0)
-# for key in records:
-#     record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
-#     error = False
-#     for i, column in enumerate(record.columns):
-#         if column != records[key][i]:
-#             error = True
-#     if error:
-#         print('select error on', key, ':', record, ', correct:', records[key])
-#     else:
-#         print('select on', key, ':', record)
+# Measuring Select Performance
+select_time_0 = process_time()
+for i in range(0, 1000):
+    query.select(choice(keys), 0, [1, 1, 1, 1, 1])
+select_time_1 = process_time()
+print("Selecting 10k records took:  \t\t\t", select_time_1 - select_time_0)
+for key in records:
+    record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
+    error = False
+    for i, column in enumerate(record.columns):
+        if column != records[key][i]:
+            error = True
+    if error:
+        print('select error on', key, ':', record, ', correct:', records[key])
+    # else:
+    #     print('select on', key, ':', record)
 
 # # Measuring Aggregate Performance
 # agg_time_0 = process_time()
@@ -100,16 +100,16 @@ for c in range(0, grades_table.num_columns):
 		r = sorted(sample(range(0, len(keys)), 2))
 		column_sum = sum(map(lambda key: records[key][c], keys[r[0]: r[1] + 1]))
 		result = query.sum(keys[r[0]], keys[r[1]], c)
-		# if column_sum != result:
-		#     print('sum error on [', keys[r[0]], ',', keys[r[1]], ']: ', result, ', correct: ', column_sum)
+		if column_sum != result:
+		    print('sum error on [', keys[r[0]], ',', keys[r[1]], ']: ', result, ', correct: ', column_sum)
 		# else:
 		#     print('sum on [', keys[r[0]], ',', keys[r[1]], ']: ', column_sum)
 agg_time_1 = process_time()
 print("Aggregate 10k of 100 record batch took:\t", agg_time_1 - agg_time_0)
 
-# Measuring Delete Performance
-delete_time_0 = process_time()
-for i in range(0, 10000):
-    query.delete(906659671 + i)
-delete_time_1 = process_time()
-print("Deleting 10k records took:  \t\t\t", delete_time_1 - delete_time_0)
+# # Measuring Delete Performance
+# delete_time_0 = process_time()
+# for i in range(0, 10000):
+#     query.delete(906659671 + i)
+# delete_time_1 = process_time()
+# print("Deleting 10k records took:  \t\t\t", delete_time_1 - delete_time_0)

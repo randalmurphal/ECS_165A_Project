@@ -34,24 +34,30 @@ class Index:
     def locate_range(self, begin, end, column):
         vals = []
         started = False
-        for p_range in self.table.page_directory:
+        for k, p_range in enumerate(self.table.page_directory):
             for base_pg in p_range.range[0]:
                 for i, page in enumerate(base_pg.pages[4]):
                     for j in range(page.num_records):
                         val = page.retrieve(j)
-                        # start  = min(begin, end)
-                        # finish = max(begin, end)
-                        # print(start, finish)
                         if val == begin:
                             started = True
                         if started:
-                            vals.append(base_pg.pages[column+4][i].retrieve(j))
+                            base_rid   = base_pg.pages[1][i].retrieve(j)
+                            base_indir = base_pg.pages[0]
+                            schema_enc = base_pg.pages[3][i]
+                            if schema_enc[column]:
+                                tail_rid    = base_indir[base_rid]
+                                tail_page_i = tail_rid // 4096
+                                tail_phys_page = (tail_rid % 4096) // 512
+                                tail_rec    = tail_rid % 512
+                                tail_page   = self.table.page_directory[k].range[1][tail_page_i].pages
+                                # print("tail:",tail_page[column+4][tail_phys_page].retrieve(tail_rec))
+                                # print("base:",base_pg.pages[column+4][i].retrieve(j))
+                                vals.append(tail_page[column+4][tail_phys_page].retrieve(tail_rec))
+                            else:
+                                vals.append(base_pg.pages[column+4][i].retrieve(j))
                         if val == end:
                             return vals
-                    # for l in range(page.num_records):
-                    #     val = page.retrieve(l)
-                    #     if val >= begin and val <= end:
-                    #         rid_vals.append(base_pg[1].retrieve(i))
         return vals
 
     """

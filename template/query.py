@@ -20,6 +20,7 @@ class Query:
 
     def __init__(self, table):
         self.table = table
+        self.m = 0
         pass
 
     """
@@ -66,7 +67,7 @@ class Query:
             if new_base_page:
                 self.table.page_directory[page_range_index].append_base_page(new_base)
 
-                values = [0, self.table.RID_count, 0, 0]
+                values = [self.table.RID_count, 0, 0]
                 self.add_meta(new_base, page_index, values)
 
                 for i, col in enumerate(columns):
@@ -82,7 +83,7 @@ class Query:
                     for i, col in enumerate(columns):
                         new_base.pages[i+4][page_index].write(col)
 
-                    values = [0, self.table.RID_count, 0, 0]
+                    values = [self.table.RID_count, 0, 0]
                     self.add_meta(new_base, page_index, values)
                 else:
                     new_base = self.table.page_directory[page_range_index].range[0][base_page_index]
@@ -90,7 +91,7 @@ class Query:
                     for i, col in enumerate(columns):
                         new_base.pages[i+4][page_index].write(col)
 
-                    values = [0, self.table.RID_count, 0, 0]
+                    values = [self.table.RID_count, 0, 0]
                     self.add_meta(new_base, page_index, values)
 
         self.table.RID_count += 1
@@ -142,11 +143,11 @@ class Query:
                 # print(len(columns))
                 # print(len(tail_page[4:]))
                 for i, col in enumerate(tail_page[4:]):
-                    value = col[page_i].retrieve(tail_rid)
+                    value = col[page_i].retrieve(tail_rid % 512)
                     if value == MAX_INT:
                         columns[i] = base_pages[i+4][page].retrieve(record)
                     else:
-                        columns[i] = col[page_i].retrieve(tail_rid)
+                        columns[i] = col[page_i].retrieve(tail_rid % 512)
 
             rec = Record(rid, key, columns)
             records.append(rec)
@@ -163,7 +164,7 @@ class Query:
 
         query_columns = []
         for i, col in enumerate(columns):
-            if col:
+            if col != None:
                 query_columns.append(1)
             else:
                 query_columns.append(0)
@@ -193,7 +194,7 @@ class Query:
             for i, col in enumerate(self.table.page_directory[p_range_loc].range[1][tail_page_i].pages[4:]):
                 if not columns[i] and not base_schema[i]:
                     cols.append(MAX_INT)
-                elif not columns[i]:
+                elif columns[i] == None:
                     cols.append(col[page_i].retrieve(record_i))
                 else:
                     cols.append(columns[i])
@@ -219,12 +220,21 @@ class Query:
         else:
             tail_pages[-1].pages[3].append(np.zeros(len(columns)))
         # Append to most recent tail page
+        # If the last tail page is full
+        # print(tail_pages[-1].num_records)
+        if tail_pages[-1].num_records % 512 == 0:
+            for i, col in enumerate(tail_pages[-1].pages):
+                # Not indirection & schema
+                if not i == 0 and not i == 3:
+                    col.append(Page())
         tail_page_i = tail_pages[-1].num_records // 512
+        # if not tail_page_i <=512 and not tail_page_i >= 0:
+        #     print(tail_page_i)
         tail_pages[-1].pages[4][tail_page_i].write(key)
+        tail_pages[-1].num_records += 1
         # write column values into new tail page record
         # print(len(tail_pages[-1].pages[5:]))
         for i, col in enumerate(tail_pages[-1].pages[5:]):
-            print("cols:", cols[i+1])
             col[tail_page_i].write(cols[i+1])
         # Update Indirection for tail page
         tail_indirection = tail_pages[-1].pages[0]
