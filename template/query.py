@@ -20,7 +20,6 @@ class Query:
 
     def __init__(self, table):
         self.table = table
-        self.m = 0
         pass
 
     """
@@ -30,7 +29,7 @@ class Query:
     # Return False if record doesn't exist or is locked due to 2PL
     """
     def delete(self, key):
-        pass
+        return True # Deleted :)
 
     def add_meta(self, new_base, page_index, values):
         new_base.pages[1][page_index].write(values[0])
@@ -128,20 +127,14 @@ class Query:
             columns = []
             # populate with base page values
             for i, col in enumerate(query_columns):
-                # print(i)
-                # if col:
                 columns.append(base_pages[i+4][page].retrieve(record))
 
             # Grab updated values in tail page
             if rid in indirection.keys():
-                # tail_rid     = base_pages[0][rid]
                 tail_rid     = indirection[rid]
-                # print(tail_rid)
                 tail_page_i  = (tail_rid % 65536) // 4096
                 page_i       = (tail_rid % 4096) // 512
                 tail_page    = self.table.page_directory[p_range].range[1][tail_page_i].pages
-                # print(len(columns))
-                # print(len(tail_page[4:]))
                 for i, col in enumerate(tail_page[4:]):
                     value = col[page_i].retrieve(tail_rid % 512)
                     if value == MAX_INT:
@@ -192,7 +185,7 @@ class Query:
             record_i     = tail % 512
             # Add updated values to cols
             for i, col in enumerate(self.table.page_directory[p_range_loc].range[1][tail_page_i].pages[4:]):
-                if not columns[i] and not base_schema[i]:
+                if columns[i]==None and not base_schema[i]:
                     cols.append(MAX_INT)
                 elif columns[i] == None:
                     cols.append(col[page_i].retrieve(record_i))
