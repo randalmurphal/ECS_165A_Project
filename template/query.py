@@ -109,32 +109,43 @@ class Query:
         ind = Index(self.table)
         locations = ind.locate(column, key)
         records = []
+        # print(len(locations))
 
         for location in locations:
+            # print("loc:", location)
             p_range = location[0]
             base_pg = location[1]
             page    = location[2]
             record  = location[3]
-            base_pg = self.table.page_directory[p_range].range[0][base_pg].pages
-            rid     = base_pg[1][page].retrieve(record)
-            key     = base_pg[4][page].retrieve(record)
-            rec_i = page * 512 + record
-            base_schema = base_pg[3][rec_i]
+            base_pages = self.table.page_directory[p_range].range[0][base_pg].pages
+            rid     = base_pages[1][page].retrieve(record)
+            key     = base_pages[4][page].retrieve(record)
+            rec_i   = page * 512 + record
+            base_schema = base_pages[3][rec_i]
+            indirection = base_pages[0]
 
             columns = []
             # populate with base page values
-            for i, col in enumerate(query_columns[1:]):
-                if col:
-                    columns.append(self.table.page_directory[p_range].range[0][base_pg].pages[i+5][page].retrieve(record))
+            for i, col in enumerate(query_columns):
+                # print(i)
+                # if col:
+                columns.append(base_pages[i+4][page].retrieve(record))
+
             # Grab updated values in tail page
-            if rid in indirection.keys()
-                tail_rid     = self.table.page_directory[p_range].range[0][base_pg].pages[0][rid]
+            if rid in indirection.keys():
+                # tail_rid     = base_pages[0][rid]
+                tail_rid     = indirection[rid]
+                # print(tail_rid)
                 tail_page_i  = (tail_rid % 65536) // 4096
                 page_i       = (tail_rid % 4096) // 512
                 tail_page    = self.table.page_directory[p_range].range[1][tail_page_i].pages
-                for i, col in enumerate(tail_page[5:]):
-                    if base_schema[1:][i]:
-                        col[page_i].retrieve(tail_rid)
+                # print(len(columns))
+                # print(len(tail_page[4:]))
+                for i, col in enumerate(tail_page[4:]):
+                    # if base_schema[1:][i]:
+                    value = col[page_i].retrieve(tail_rid)
+                    print("value:", value)
+                    columns[i] = col[page_i].retrieve(tail_rid)
 
             rec = Record(rid, key, columns)
             records.append(rec)
@@ -177,9 +188,7 @@ class Query:
             page_i       = (tail % 4096) // 512
             record_i     = tail % 512
             # Add updated values to cols
-            # print(len(columns))
-            # print(len(self.table.page_directory[p_range_loc].range[1][tail_page_i].pages[5:]))
-            for i, col in enumerate(self.table.page_directory[p_range_loc].range[1][tail_page_i].pages[5:]):
+            for i, col in enumerate(self.table.page_directory[p_range_loc].range[1][tail_page_i].pages[4:]):
                 if not columns[i] and not base_schema[i]:
                     cols.append(MAX_INT)
                 elif not columns[i]:
@@ -212,7 +221,8 @@ class Query:
         tail_pages[-1].pages[4][tail_page_i].write(key)
         # write column values into new tail page record
         # print(len(tail_pages[-1].pages[5:]))
-        # print(len(cols))
+        print("len cols:", len(cols))
+        print("cols:", cols)
         for i, col in enumerate(tail_pages[-1].pages[5:]):
             col[tail_page_i].write(cols[i])
         # Update Indirection for tail page
@@ -225,6 +235,8 @@ class Query:
             if col:
                 base_schema[i] = col
                 tail_schema[i] = col
+
+        return True
 
     """
     :param start_range: int         # Start of the key range to aggregate
