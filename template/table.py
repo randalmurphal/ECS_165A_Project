@@ -39,6 +39,7 @@ class Table:
         self.index = Index(self)
         # self.page_ranges.append(PageRange())
         self.RID_count = 0
+        self.tail_RID  = 0
 
     def __merge(self):
         pass

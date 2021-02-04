@@ -6,6 +6,7 @@ class PageRange:
         # 2nd index is for tail pages
         self.range = [[],[]]
         self.num_base_pages = 0
+        self.num_tail_pages = 0
 
     def return_page(self):
         pass

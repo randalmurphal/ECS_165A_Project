@@ -9,11 +9,11 @@ class Page:
 		self.num_records = 0
 		self.data = bytearray(4096)
 
-	def has_capacity(self):
+	def full(self):
 		if self.num_records >= 4096:
-		    return False
+		    return True
 		# Check if Full, so if bytes go over 4096 or 4 KB
-		return True
+		return False
 
 	def write(self, value):
 		offset = self.num_records * 8

@@ -38,7 +38,7 @@ class Index:
             for base_pg in p_range.range[0]:
                 for i, page in enumerate(base_pg.pages[4]):
                     for j in range(page.num_records):
-                        val    = page.retrieve(j)
+                        val = page.retrieve(j)
                         # start  = min(begin, end)
                         # finish = max(begin, end)
                         # print(start, finish)

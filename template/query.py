@@ -4,7 +4,11 @@ from conceptual_page import ConceptualPage
 from page_range import PageRange
 from page import Page
 
+import numpy as np
 import time
+import math
+
+MAX_INT = int(math.pow(2, 63) - 1)
 
 class Query:
     """
@@ -28,8 +32,9 @@ class Query:
         pass
 
     def add_meta(self, new_base, page_index, values):
-        for i, value in enumerate(values):
-            new_base.pages[i][page_index].write(value)
+        new_base.pages[1][page_index].write(values[0])
+        new_base.pages[2][page_index].write(values[1])
+        new_base.pages[3].append(np.zeros(len(new_base.pages) - 4))
 
     """
     # Insert a record with specified columns
@@ -38,8 +43,6 @@ class Query:
     """
     # Tuple of columns(Key,Value)
     def insert(self, *columns):
-        available_RIDS = [0]
-
         new_page_range   = self.table.RID_count % 65536 == 0
         page_range_index = self.table.RID_count // 65536
         new_base_page    = self.table.RID_count % 4096 == 0
@@ -55,9 +58,9 @@ class Query:
             new_range.append_base_page(new_base) # [0].append(new_base)
             self.table.page_directory.append(new_range)
             for i, col in enumerate(columns):
-            	new_base.pages[i+4][page_index].write(col)
+                new_base.pages[i+4][page_index].write(col)
 
-            values = [0, self.table.RID_count, 0, 0]
+            values = [self.table.RID_count, 0, 0]
             self.add_meta(new_base, page_index, values)
         else:
             if new_base_page:
@@ -73,7 +76,8 @@ class Query:
 		            # append new page to current conceptualpage
                     new_base = self.table.page_directory[page_range_index].range[0][base_page_index]
                     for i in range(len(new_base.pages)):
-                        new_base.pages[i].append(Page())
+                        if not i == 0 and not i == 3:
+                            new_base.pages[i].append(Page())
 
                     for i, col in enumerate(columns):
                         new_base.pages[i+4][page_index].write(col)
@@ -111,13 +115,26 @@ class Query:
             base_pg = location[1]
             page    = location[2]
             record  = location[3]
-            rid     = self.table.page_directory[p_range].range[0][base_pg].pages[1][page].retrieve(record)
-            key     = self.table.page_directory[p_range].range[0][base_pg].pages[4][page].retrieve(record)
+            base_pg = self.table.page_directory[p_range].range[0][base_pg].pages
+            rid     = base_pg[1][page].retrieve(record)
+            key     = base_pg[4][page].retrieve(record)
+            rec_i = page * 512 + record
+            base_schema = base_pg[3][rec_i]
 
             columns = []
+            # populate with base page values
             for i, col in enumerate(query_columns[1:]):
                 if col:
                     columns.append(self.table.page_directory[p_range].range[0][base_pg].pages[i+5][page].retrieve(record))
+            # Grab updated values in tail page
+            if rid in indirection.keys()
+                tail_rid     = self.table.page_directory[p_range].range[0][base_pg].pages[0][rid]
+                tail_page_i  = (tail_rid % 65536) // 4096
+                page_i       = (tail_rid % 4096) // 512
+                tail_page    = self.table.page_directory[p_range].range[1][tail_page_i].pages
+                for i, col in enumerate(tail_page[5:]):
+                    if base_schema[1:][i]:
+                        col[page_i].retrieve(tail_rid)
 
             rec = Record(rid, key, columns)
             records.append(rec)
@@ -129,8 +146,85 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
-        # Create tail pages -- TODO:
-        pass
+        ind = Index(self.table)
+        location = ind.locate(0, key)
+
+        query_columns = []
+        for i, col in enumerate(columns):
+            if col:
+                query_columns.append(1)
+            else:
+                query_columns.append(0)
+
+        record = self.select(key, 0, query_columns)
+        p_range_loc = location[0][0]
+        b_page_loc  = location[0][1]
+        page_loc    = location[0][2]
+        record_loc  = location[0][3]
+
+        base_page  = self.table.page_directory[p_range_loc].range[0][b_page_loc].pages
+
+        indirection = base_page[0]
+        base_schema = base_page[3][page_loc]
+        record_rid  = base_page[1][page_loc].retrieve(record_loc)
+        cols        = []
+
+        tail_RID = self.table.tail_RID
+        prev_tail_RID = tail_RID
+        if record_rid in indirection.keys(): # if update has happened already (ie tail page exists for record)
+            tail = indirection[record_rid]
+            tail_page_i  = tail // 4096
+            page_i       = (tail % 4096) // 512
+            record_i     = tail % 512
+            # Add updated values to cols
+            # print(len(columns))
+            # print(len(self.table.page_directory[p_range_loc].range[1][tail_page_i].pages[5:]))
+            for i, col in enumerate(self.table.page_directory[p_range_loc].range[1][tail_page_i].pages[5:]):
+                if not columns[i] and not base_schema[i]:
+                    cols.append(MAX_INT)
+                elif not columns[i]:
+                    cols.append(col[page_i].retrieve(record_i))
+                else:
+                    cols.append(columns[i])
+
+            prev_tail_RID = tail
+        else: # no updates for that record yet
+            for col in columns:
+                if col:
+                    cols.append(col)
+                else:
+                    cols.append(MAX_INT)
+
+        indirection[record_rid] = tail_RID
+        self.table.tail_RID += 1
+
+        ## FIGURING OUT WHICH TAIL PAGE TO APPEND TO, CREATE IF DOESNT EXIST
+        tail_pages = self.table.page_directory[p_range_loc].range[1]
+        p_range = self.table.page_directory[p_range_loc]
+        if not tail_pages: # If no tail pages created, create new
+            p_range.append_tail_page(ConceptualPage(columns))
+        elif tail_pages[-1].full(): # if tail page full, create new
+            p_range.append_tail_page(ConceptualPage(columns))
+        else:
+            tail_pages[-1].pages[3].append(np.zeros(len(columns)))
+        # Append to most recent tail page
+        tail_page_i = tail_pages[-1].num_records // 512
+        tail_pages[-1].pages[4][tail_page_i].write(key)
+        # write column values into new tail page record
+        # print(len(tail_pages[-1].pages[5:]))
+        # print(len(cols))
+        for i, col in enumerate(tail_pages[-1].pages[5:]):
+            col[tail_page_i].write(cols[i])
+        # Update Indirection for tail page
+        tail_indirection = tail_pages[-1].pages[0]
+        tail_indirection[tail_RID] = prev_tail_RID
+
+        tail_schema = tail_pages[-1].pages[3][-1] # Get most recently added schema encoding
+        # update base page schema encoding
+        for i, col in enumerate(columns):
+            if col:
+                base_schema[i] = col
+                tail_schema[i] = col
 
     """
     :param start_range: int         # Start of the key range to aggregate
