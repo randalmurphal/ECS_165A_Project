@@ -34,10 +34,10 @@ class Table:
         # Page_directory stores the basepages and to find the base page you want
         # Base Pages: RID // 4906 , Physical Page:
         self.page_directory = []
+        self.key_dict = {}
         # Each time u create a base page store it in the page_directory
         # Given RID, return a page based off of the RID
         self.index = Index(self)
-        # self.page_ranges.append(PageRange())
         self.RID_count = 0
         self.tail_RID  = 0
 

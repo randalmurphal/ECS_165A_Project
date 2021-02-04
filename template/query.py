@@ -21,38 +21,66 @@ class Query:
     def __init__(self, table):
         self.table = table
         pass
-
     """
     # internal Method
     # Read a record with specified RID
     # Returns True upon succesful deletion
     # Return False if record doesn't exist or is locked due to 2PL
-    # You can tell if a Base Record has been "Deleted" by checking the Indirection column and the Schema encoding column.
-      If the Base record is "Deleted" it will have all zeros in its Schema Encoding column AND STILL point towards a tail record through its indirection column.
+    # You can tell if a Base Record has been "Deleted" by checking the Indirection
+    column and the Schema encoding column.
+      If the Base record is "Deleted" it will have all zeros in its Schema Encoding
+      column AND STILL point towards a tail record through its indirection column.
 
     Directions:
-    1. See if a Base Record exists for the given RID. If no Base record exists for the given RID: Return False.
+    1. See if a Base Record exists for the given RID. If no Base record exists for the
+    given RID: Return False.
 
-    2. Check  the Base Record's Indirection column to see if it has ever been updated. If the base record has never been updated proceed to step #3a, otherwise skip to step #4a
+    2. Check  the Base Record's Indirection column to see if it has ever been updated. If the
+    base record has never been updated proceed to step #3a, otherwise skip to step #4a
 
     # IF THE BASE RECORD HAS NEVER BEEN UPDATED
-    3a. Create a new Tail Record in which all the data columns are NULL and the schema encoding column is all zeros.
-    3b. Point the indirection column of the base record to the new Tail Record. DO NOT UPDATE THE SCHEMA ENCODING COLUMN IN THE BASE RECORD; IT SHOULD REMAIN ALL ZEROS
-    3c. The Base Record is now set to be Deleted in the next merge due to it containing all 0s in the schema encoding column AND it's indirection column points to a tail record.
+    3a. Create a new Tail Record in which all the data columns are NULL and the
+    schema encoding column is all zeros.
+    3b. Point the indirection column of the base record to the new Tail Record.
+    DO NOT UPDATE THE SCHEMA ENCODING COLUMN IN THE BASE RECORD; IT SHOULD REMAIN ALL ZEROS
+    3c. The Base Record is now set to be Deleted in the next merge due to it containing all
+    0s in the schema encoding column AND it's indirection column points to a tail record.
 
     # IF THE BASE RECORD HAS BEEN UPDATED
-    4a. Create a New Tail Record in which all the data columns are NULL and the schema encoding column is all zeros.
-    4b. Copy the indirection column of the Base Record and paste it into the Indirection column of the New Tail Record.
-    4c. Edit the indrection column of the Base Record and point it to the New Tail Record. 
+    4a. Create a New Tail Record in which all the data columns are NULL and the schema
+    encoding column is all zeros.
+    4b. Copy the indirection column of the Base Record and paste it into the Indirection
+    column of the New Tail Record.
+    4c. Edit the indrection column of the Base Record and point it to the New Tail Record.
     4d. Set the schema encoding column of the Base Record to be all Zeros
-    4e. The Base Record is now set to be Deleted in the next merge due to it containing all 0s in the schema encoding column AND it's indirection column points to a tail record.
-
-    
+    4e. The Base Record is now set to be Deleted in the next merge due to it containing
+    all 0s in the schema encoding column AND it's indirection column points to a tail record.
     """
-    def delete(self, key): 
+    def delete(self, key):
+        # Grab location of base record
         ind = Index(self.table)
-        
-        return True # Deleted :)
+        baseR_loc = ind.locate(key, 0, key)[0]
+        baseR_p_range, baseR_base_pg, baseR_pg, baseR_rec = baseR_loc
+        base_pages    = self.table.page_directory[baseR_p_range].range[0][baseR_base_pg].pages
+        base_rid      = base_pages[1][baseR_pg].retrieve(baseR_rec)
+        base_schema_i = 512*baseR_pg + baseR_rec
+        base_schema   = base_pages[3][base_schema_i]
+        p_range       = self.table.page_directory[baseR_p_range]
+        # Check indirection column to see if has been updated
+        indirection = base_pages[0]
+        updated     = base_rid in indirection.keys()
+        n_cols      = self.table.num_columns
+        none_arr    = [None]*n_cols
+        # If not updated, add tail page with MAX_INT vals and add to indirection
+        if not updated:
+            # Update to add tail page with None for all values
+            self.update(key, *[None]*n_cols)
+        else:
+            # Change base schema to all 0's, then update which gives None tail page
+            base_schema = np.zeros(n_cols)
+            self.update(key, *[None]*n_cols)
+
+        return True
 
     def add_meta(self, new_base, page_index, values):
         new_base.pages[1][page_index].write(values[0])
@@ -72,6 +100,7 @@ class Query:
         base_page_index  = (self.table.RID_count % 65536) // 4096
         new_page         = self.table.RID_count % 512 == 0
         page_index       = (self.table.RID_count % 4096) // 512
+        record_index     = self.table.RID_count % 512
 
         new_base  = ConceptualPage(columns)
         new_range = PageRange()
@@ -116,6 +145,9 @@ class Query:
                     values = [self.table.RID_count, 0, 0]
                     self.add_meta(new_base, page_index, values)
 
+        key      = columns[0]
+        location = (page_range_index, base_page_index, page_index, record_index)
+        self.table.key_dict[key] = location
         self.table.RID_count += 1
         return True
 
@@ -128,46 +160,43 @@ class Query:
     # Assume that select will never be called on a key that doesn't exist
     """
     def select(self, key, column, query_columns):
-        # table -> page_directory -> page range -> conceptual page -> physical page -> record index
-        ind = Index(self.table)
-        locations = ind.locate(column, key)
-        records = []
-        # print(len(locations))
+        location = self.table.key_dict[key] # Assume all keys have been inserted
 
-        for location in locations:
-            # print("loc:", location)
-            p_range = location[0]
-            base_pg = location[1]
-            page    = location[2]
-            record  = location[3]
-            base_pages = self.table.page_directory[p_range].range[0][base_pg].pages
-            rid     = base_pages[1][page].retrieve(record)
-            key     = base_pages[4][page].retrieve(record)
-            rec_i   = page * 512 + record
-            base_schema = base_pages[3][rec_i]
-            indirection = base_pages[0]
+        p_range, base_pg, page, record = location
+        base_pages = self.table.page_directory[p_range].range[0][base_pg].pages
+        rid     = base_pages[1][page].retrieve(record)
+        key     = base_pages[4][page].retrieve(record)
+        rec_i   = page * 512 + record
+        base_schema = base_pages[3][rec_i]
+        indirection = base_pages[0]
 
-            columns = []
-            # populate with base page values
-            for i, col in enumerate(query_columns):
-                columns.append(base_pages[i+4][page].retrieve(record))
+        columns = []
+        # populate with base page values
+        for i, col in enumerate(query_columns):
+            columns.append(base_pages[i+4][page].retrieve(record))
 
-            # Grab updated values in tail page
-            if rid in indirection.keys():
-                tail_rid     = indirection[rid]
-                tail_page_i  = (tail_rid % 65536) // 4096
-                page_i       = (tail_rid % 4096) // 512
-                tail_page    = self.table.page_directory[p_range].range[1][tail_page_i].pages
-                for i, col in enumerate(tail_page[4:]):
-                    value = col[page_i].retrieve(tail_rid % 512)
-                    if value == MAX_INT:
-                        columns[i] = base_pages[i+4][page].retrieve(record)
-                    else:
-                        columns[i] = col[page_i].retrieve(tail_rid % 512)
+        # Grab updated values in tail page
+        if rid in indirection.keys():
+            tail_rid     = indirection[rid]
+            tail_page_i  = (tail_rid % 65536) // 4096
+            page_i       = (tail_rid % 4096) // 512
+            tail_page    = self.table.page_directory[p_range].range[1][tail_page_i].pages
+            # print("columns:", columns)
+            for i, col in enumerate(tail_page[4:]):
+                value = col[page_i].retrieve(tail_rid % 512)
+                # print("value:", value)
+                if value == MAX_INT:
+                    columns[i] = base_pages[i+4][page].retrieve(record)
+                else:
+                    # print("page_i:",page_i)
+                    # print("tail_rid:", tail_rid)
+                    # print("i:", i)
+                    # print("len_cols:", columns)
+                    # print("query_cols:", query_columns)
+                    columns[i] = col[page_i].retrieve(tail_rid % 512)
 
-            rec = Record(rid, key, columns)
-            records.append(rec)
-        return records
+        rec = Record(rid, key, columns)
+        return [rec]
 
     """
     # Update a record with specified key and columns
@@ -175,8 +204,9 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
-        ind = Index(self.table)
-        location = ind.locate(0, key)
+        # ind = Index(self.table)
+        # location = ind.locate(key, 0, key)
+        location = self.table.key_dict[key] # Assume all keys have been inserted
 
         query_columns = []
         for i, col in enumerate(columns):
@@ -186,10 +216,7 @@ class Query:
                 query_columns.append(0)
 
         record = self.select(key, 0, query_columns)
-        p_range_loc = location[0][0]
-        b_page_loc  = location[0][1]
-        page_loc    = location[0][2]
-        record_loc  = location[0][3]
+        p_range_loc, b_page_loc, page_loc, record_loc = location[0]
 
         base_page  = self.table.page_directory[p_range_loc].range[0][b_page_loc].pages
 

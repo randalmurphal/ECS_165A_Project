@@ -39,7 +39,7 @@ class Page:
 		for i in range(0,8):
 			try:
 				temp[i] = self.data[offset]
-				offset = offset+1
+				offset  = offset+1
 			except IndexError:
 				print(offset, self.num_records)
 		return int.from_bytes(temp,byteorder='big')

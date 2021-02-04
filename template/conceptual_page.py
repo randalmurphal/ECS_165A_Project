@@ -2,6 +2,12 @@
 from page import Page
 import numpy as np
 # 4096 total records
+'''
+0: Indirection
+1: RID column
+2: TimeStamp Column
+3: Schema Encoding
+'''
 class ConceptualPage:
 
     def __init__(self, columns):

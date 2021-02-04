@@ -15,16 +15,27 @@ class Index:
     # returns the location of all records with the given value on column "column"
     """
 
-    def locate(self, column, value):
+    def locate(self, key, column, value):
         loc_vals = []
-        for i, p_range in enumerate(self.table.page_directory):
-            for j, base_pg in enumerate(p_range.range[0]):
-                for k, page in enumerate(base_pg.pages[column+4]):
-                    for l in range(page.num_records):
-                        val = page.retrieve(l)
-                        # print(val, value)
-                        if val == value:
-                            loc_vals.append((i, j, k, l))
+        key_dict = self.table.key_dict
+        for key in key_dict:
+            cols = []
+            location = key_dict[key]
+            p_range, base_pg, page, record = location
+            base_pages = self.table.page_directory[p_range].range[0][base_pg].pages
+            val = base_pages[column+4][page].retrieve(record)
+
+            if val == value:
+                loc_vals.append(location)
+
+        # for i, p_range in enumerate(self.table.page_directory):
+        #     for j, base_pg in enumerate(p_range.range[0]):
+        #         for k, page in enumerate(base_pg.pages[column+4]):
+        #             for l in range(page.num_records):
+        #                 val = page.retrieve(l)
+        #                 # print(val, value)
+        #                 if val == value:
+        #                     loc_vals.append((i, j, k, l))
         return loc_vals
 
     """
@@ -45,14 +56,12 @@ class Index:
                             base_rid   = base_pg.pages[1][i].retrieve(j)
                             base_indir = base_pg.pages[0]
                             schema_enc = base_pg.pages[3][i]
-                            if schema_enc[column]:
+                            if schema_enc[column] and base_rid in base_indir.keys():
                                 tail_rid    = base_indir[base_rid]
                                 tail_page_i = tail_rid // 4096
                                 tail_phys_page = (tail_rid % 4096) // 512
                                 tail_rec    = tail_rid % 512
                                 tail_page   = self.table.page_directory[k].range[1][tail_page_i].pages
-                                # print("tail:",tail_page[column+4][tail_phys_page].retrieve(tail_rec))
-                                # print("base:",base_pg.pages[column+4][i].retrieve(j))
                                 vals.append(tail_page[column+4][tail_phys_page].retrieve(tail_rec))
                             else:
                                 vals.append(base_pg.pages[column+4][i].retrieve(j))

@@ -10,6 +10,7 @@ grades_table = db.create_table('Grades', 5, 0)
 query = Query(grades_table)
 keys = []
 records = {}
+num_iters = 5000
 
 insert_time_0 = process_time()
 # for i in range(0, 10000):
@@ -17,10 +18,10 @@ insert_time_0 = process_time()
 # 	query.insert(key, 93, 0, 0, 0)
 # 	records[key] = [key, 93, 0, 0, 0]
 # 	keys.append(key)
-for i in range(0, 10000):
-	key = 92106429 + randint(0, 11000)
+for i in range(0, num_iters):
+	key = 92106429 + randint(0, num_iters-1)
 	while key in records: # Prevents duplicate keys
-		key = 92106429 + randint(0, 9000)
+		key = 92106429 + randint(0, num_iters-1)
 	records[key] = [key, randint(0, 20), randint(0, 20), randint(0, 20), randint(0, 20)]
 	query.insert(*records[key])
 	keys.append(key)
@@ -54,24 +55,19 @@ for key in records:
 		records[key][i] = value
 		query.update(key, *updated_columns)
 		record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
-		# print(record.columns)
 		error = False
 		for j, column in enumerate(record.columns):
-			# print("records:", records[key][j])
-			# print("column:", column)
 			if column != records[key][j]:
 				error = True
 		if error:
 			print('update error on', original, 'and', updated_columns, ':', record.columns, ', correct:', records[key])
-		# else:
-		# 	print('update on', original, 'and', updated_columns, ':', record.columns)
 		updated_columns[i] = None
 update_time_1 = process_time()
 print("Updating 10k records took:  \t\t\t", update_time_1 - update_time_0)
 
 # Measuring Select Performance
 select_time_0 = process_time()
-for i in range(0, 10000):
+for i in range(0, num_iters):
     query.select(choice(keys), 0, [1, 1, 1, 1, 1])
 select_time_1 = process_time()
 print("Selecting 10k records took:  \t\t\t", select_time_1 - select_time_0)
@@ -105,11 +101,11 @@ for c in range(0, grades_table.num_columns):
 		# else:
 		#     print('sum on [', keys[r[0]], ',', keys[r[1]], ']: ', column_sum)
 agg_time_1 = process_time()
-print("Aggregate 10k of 100 record batch took:\t", agg_time_1 - agg_time_0)
+print("Aggregate 10k of 100 record batch took:\t\t", agg_time_1 - agg_time_0)
 
-# # Measuring Delete Performance
-# delete_time_0 = process_time()
-# for i in range(0, 10000):
-#     query.delete(906659671 + i)
-# delete_time_1 = process_time()
-# print("Deleting 10k records took:  \t\t\t", delete_time_1 - delete_time_0)
+# Measuring Delete Performance
+delete_time_0 = process_time()
+for i in range(0, num_iters):
+	query.delete(92106429 + i)
+delete_time_1 = process_time()
+print("Deleting 10k records took:  \t\t\t", delete_time_1 - delete_time_0)
