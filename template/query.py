@@ -236,7 +236,7 @@ class Query:
         tail_schema = tail_pages[-1].pages[3][-1] # Get most recently added schema encoding
         # update base page schema encoding
         for i, col in enumerate(columns):
-            if col:
+            if col != None:
                 base_schema[i] = 1
                 tail_schema[i] = 1
 
