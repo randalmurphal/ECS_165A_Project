@@ -7,6 +7,7 @@ class PageRange:
         self.range = [[],[]]
         self.num_base_pages = 0
         self.num_tail_pages = 0
+        self.tail_RID       = 0
 
     def return_page(self):
         pass
@@ -20,6 +21,7 @@ class PageRange:
 
     def append_tail_page(self,conceptual_page):
         # map our base pages to tail pages
+        self.num_tail_pages += 1
         self.range[1].append(conceptual_page)
 
     def merge(self,pages):

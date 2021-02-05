@@ -1,3 +1,7 @@
+# from template.db import Database
+# from template.query import Query
+# from template.time import process_time
+# from template.random import choice, randrange
 from db import Database
 from query import Query
 from time import process_time

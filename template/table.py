@@ -35,7 +35,6 @@ class Table:
         # Given RID, return a page based off of the RID
         self.index = Index(self)
         self.RID_count = 0
-        self.tail_RID  = 0
         self.init_key  = 0
 
     def __merge(self):

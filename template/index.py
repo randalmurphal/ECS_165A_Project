@@ -19,7 +19,6 @@ class Index:
         loc_vals = []
         key_dict = self.table.key_dict
         for key in key_dict:
-            cols = []
             location = key_dict[key]
             p_range, base_pg, page, record = location
             base_pages = self.table.page_directory[p_range].range[0][base_pg].pages
