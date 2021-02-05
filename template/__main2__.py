@@ -17,7 +17,6 @@ testing      = True
 """ INSERT TEST """
 
 insert_time_0 = process_time()
-
 for i in range(0, num_iters):
     key = start_key + randint(0, num_iters-1)
     while key in records: # Prevents duplicate keys
@@ -27,13 +26,11 @@ for i in range(0, num_iters):
     keys.append(key)
     if testing:
         print('inserted', records[key])
-
 insert_time_1 = process_time()
 
 """ SELECT TEST """
 
 select_time_0 = process_time()
-
 for key in records:
     record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
     error = False
@@ -45,13 +42,11 @@ for key in records:
         print('select error on', key, ':', record.columns, ', correct:', records[key])
     elif testing:
         print('select on', key, ':', record.columns)
-
 select_time_1 = process_time()
 
 """ UPDATE TEST """
 
 update_time_0 = process_time()
-
 for key in records:
     updated_columns = [None, None, None, None, None]
     for i in range(1, grades_table.num_columns):
@@ -71,7 +66,6 @@ for key in records:
         elif testing:
             print('update on', original, 'and', updated_columns, ':', record.columns)
         updated_columns[i] = None
-
 update_time_1 = process_time()
 
 """ SUM TEST """
@@ -101,7 +95,6 @@ for i in range(0, num_iters, 100):
 agg_time_1 = process_time()
 
 """ DELETE TEST """
-import time
 
 delete_time_0 = process_time()
 for i in range(0, num_iters):
