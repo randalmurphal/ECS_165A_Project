@@ -3,8 +3,8 @@ from index import Index
 from conceptual_page import ConceptualPage
 from page_range import PageRange
 from page import Page
-from datetime import datetime
 
+from datetime import datetime
 import numpy as np
 import math
 
@@ -66,9 +66,8 @@ class Query:
     # Return True upon succesful insertion
     # Returns False if insert fails for whatever reason
     """
-    # Tuple of columns(Key,Value)
     def insert(self, *columns):
-        # bc sum function asks for 10,001 key, but only have 10k
+        # bc sum function in main asks for 10,001 key, but only have 10k
         if not self.table.init_key:
             self.table.init_key = columns[0]
         new_page_range   = self.table.RID_count % MAX_PAGE_RANGE_SIZE == 0
