@@ -5,14 +5,14 @@ from random import choice, randrange, randint, sample
 import numpy as np
 
 # Student Id and 4 grades
-db = Database()
+db           = Database()
 grades_table = db.create_table('Grades', 5, 0)
-query = Query(grades_table)
-keys = []
-records = {}
-start_key = 92106429
-num_iters = 10000
-testing = True
+query        = Query(grades_table)
+keys         = []
+records      = {}
+start_key    = 92106429
+num_iters    = 10000
+testing      = True
 
 """ INSERT TEST """
 
@@ -29,7 +29,6 @@ for i in range(0, num_iters):
         print('inserted', records[key])
 
 insert_time_1 = process_time()
-print("Inserting 10k records took:  \t\t\t", insert_time_1 - insert_time_0)
 
 """ SELECT TEST """
 
@@ -47,7 +46,6 @@ for key in records:
         print('select on', key, ':', record.columns)
 
 select_time_1 = process_time()
-print("Selecting 10k records took:  \t\t\t", select_time_1 - select_time_0)
 
 """ UPDATE TEST """
 
@@ -73,27 +71,35 @@ for key in records:
         updated_columns[i] = None
 
 update_time_1 = process_time()
-print("Updating 10k records took:  \t\t\t", update_time_1 - update_time_0)
 
 """ SUM TEST """
 
 agg_time_0 = process_time()
 
-# keys_2 = sorted(list(records.keys()))
-keys_2 = list(records.keys())
-# for c in range(0, grades_table.num_columns):
 for i in range(0, num_iters, 100):
     c = randrange(0, grades_table.num_columns)
-    r = sorted(sample(range(0, len(keys_2)), 2))
-    column_sum = sum(map(lambda key: records[key][c], keys_2[r[0]: r[1] + 1]))
-    result = query.sum(keys_2[r[0]], keys_2[r[1]], c)
+    r = sorted(sample(range(0, len(keys)), 2))
+
+    start = start_key + i
+    end   = start + 99
+
+    start_ind = 0
+    end_ind   = 0
+    for i, val in enumerate(keys):
+        if val == start:
+            start_ind = i
+        elif val == end:
+            end_ind = i
+            break
+
+    column_sum = sum(map(lambda key: records[key][c], keys[start_ind: end_ind+1]))
+    result = query.sum(keys[start_ind], keys[end_ind], c)
     if column_sum != result:
-        print('sum error on [', keys_2[r[0]], ',', keys_2[r[1]], ']: ', result, ', correct: ', column_sum)
+        print('sum error on [', keys[start_ind], ',', keys[end_ind], ']: ', result, ', correct: ', column_sum)
     elif testing:
-        print('sum on [', keys_2[r[0]], ',', keys_2[r[1]], ']: ', column_sum)
+        print('sum on [', keys[r[0]], ',', keys[r[1]], ']: ', column_sum)
 
 agg_time_1 = process_time()
-print("Aggregate 10k of 100 record batch took:\t\t", agg_time_1 - agg_time_0)
 
 """ DELETE TEST """
 import time
@@ -117,51 +123,9 @@ for i in range(0, num_iters):
         record = query.select(start_key + i, 0, [1, 1, 1, 1, 1])[0]
         print("Delete on", key, ":", record.columns)
 delete_time_1 = process_time()
+
+print("Inserting 10k records took:  \t\t\t", insert_time_1 - insert_time_0)
+print("Selecting 10k records took:  \t\t\t", select_time_1 - select_time_0)
+print("Updating 10k records took:  \t\t\t", update_time_1 - update_time_0)
+print("Aggregate 10k of 100 record batch took:\t\t", agg_time_1 - agg_time_0)
 print("Deleting 10k records took:  \t\t\t", delete_time_1 - delete_time_0)
-
-
-# insert_time_0 = process_time()
-# for i in range(0, 10000):
-#     query.insert(906659671 + i, 93, 0, 0, 0)
-#     keys.append(906659671 + i)
-# insert_time_1 = process_time()
-
-# print("Inserting 10k records took:  \t\t\t", insert_time_1 - insert_time_0)
-#
-# # Measuring update Performance
-# update_cols = [
-#     [randrange(0, 100), None, None, None, None],
-#     [None, randrange(0, 100), None, None, None],
-#     [None, None, randrange(0, 100), None, None],
-#     [None, None, None, randrange(0, 100), None],
-#     [None, None, None, None, randrange(0, 100)],
-# ]
-#
-# update_time_0 = process_time()
-# for i in range(0, 10000):
-#     query.update(choice(keys), *(choice(update_cols)))
-# update_time_1 = process_time()
-# print("Updating 10k records took:  \t\t\t", update_time_1 - update_time_0)
-#
-# # Measuring Select Performance
-# select_time_0 = process_time()
-# for i in range(0, 10000):
-#     query.select(choice(keys),0 , [1, 1, 1, 1, 1])
-# select_time_1 = process_time()
-# print("Selecting 10k records took:  \t\t\t", select_time_1 - select_time_0)
-#
-# # Measuring Aggregate Performance
-# agg_time_0 = process_time()
-# for i in range(0, 10000, 100):
-#     start_value = 906659671 + i
-#     end_value = start_value + 100
-#     result = query.sum(start_value, end_value - 1, randrange(0, 5))
-# agg_time_1 = process_time()
-# print("Aggregate 10k of 100 record batch took:\t\t", agg_time_1 - agg_time_0)
-#
-# # Measuring Delete Performance
-# delete_time_0 = process_time()
-# for i in range(0, 10000):
-#     query.delete(906659671 + i)
-# delete_time_1 = process_time()
-# print("Deleting 10k records took:  \t\t\t", delete_time_1 - delete_time_0)
