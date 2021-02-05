@@ -1,5 +1,5 @@
-from template.db import Database
-from template.query import Query
+from db import Database
+from query import Query
 from time import process_time
 from random import choice, randrange
 
@@ -46,7 +46,7 @@ for i in range(0, 10000, 100):
     end_value = start_value + 100
     result = query.sum(start_value, end_value - 1, randrange(0, 5))
 agg_time_1 = process_time()
-print("Aggregate 10k of 100 record batch took:\t", agg_time_1 - agg_time_0)
+print("Aggregate 10k of 100 record batch took:\t\t", agg_time_1 - agg_time_0)
 
 # Measuring Delete Performance
 delete_time_0 = process_time()
