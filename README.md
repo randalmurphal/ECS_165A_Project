@@ -4,4 +4,4 @@
 	- Cliff Moran <>
 	- Daniel Nguyen <>
 	- Brandon Pham <>
-	- Adrian Lam <>
+	- Adrian Lam <915446720>
