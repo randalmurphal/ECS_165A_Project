@@ -10,7 +10,7 @@ grades_table = db.create_table('Grades', 5, 0)
 query = Query(grades_table)
 keys = []
 records = {}
-num_iters = 5000
+num_iters = 10000
 
 insert_time_0 = process_time()
 # for i in range(0, 10000):

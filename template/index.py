@@ -27,15 +27,6 @@ class Index:
 
             if val == value:
                 loc_vals.append(location)
-
-        # for i, p_range in enumerate(self.table.page_directory):
-        #     for j, base_pg in enumerate(p_range.range[0]):
-        #         for k, page in enumerate(base_pg.pages[column+4]):
-        #             for l in range(page.num_records):
-        #                 val = page.retrieve(l)
-        #                 # print(val, value)
-        #                 if val == value:
-        #                     loc_vals.append((i, j, k, l))
         return loc_vals
 
     """
@@ -43,30 +34,39 @@ class Index:
     """
 
     def locate_range(self, begin, end, column):
-        vals = []
-        started = False
-        for k, p_range in enumerate(self.table.page_directory):
-            for base_pg in p_range.range[0]:
-                for i, page in enumerate(base_pg.pages[4]):
-                    for j in range(page.num_records):
-                        val = page.retrieve(j)
-                        if val == begin:
-                            started = True
-                        if started:
-                            base_rid   = base_pg.pages[1][i].retrieve(j)
-                            base_indir = base_pg.pages[0]
-                            schema_enc = base_pg.pages[3][i]
-                            if schema_enc[column] and base_rid in base_indir.keys():
-                                tail_rid    = base_indir[base_rid]
-                                tail_page_i = tail_rid // 4096
-                                tail_phys_page = (tail_rid % 4096) // 512
-                                tail_rec    = tail_rid % 512
-                                tail_page   = self.table.page_directory[k].range[1][tail_page_i].pages
-                                vals.append(tail_page[column+4][tail_phys_page].retrieve(tail_rec))
-                            else:
-                                vals.append(base_pg.pages[column+4][i].retrieve(j))
-                        if val == end:
-                            return vals
+        vals      = []
+        key_dict  = self.table.key_dict
+        b_loc     = key_dict[begin]
+        b_p_range, b_base_pg, b_page, b_record = b_loc
+        e_loc    = key_dict[end]
+        e_p_range, e_base_pg, e_page, e_record = e_loc
+
+        b_rid = self.table.page_directory[b_p_range].range[0][b_base_pg].pages[1][b_page].retrieve(b_record)
+        e_rid = self.table.page_directory[e_p_range].range[0][e_base_pg].pages[1][e_page].retrieve(e_record)
+
+        # Check through all key values to see if rid is between begin and end rid
+        for key in key_dict:
+            curr_loc = key_dict[key]
+            curr_p_range, curr_base_pg, curr_page, curr_record = curr_loc
+            curr_pages = self.table.page_directory[curr_p_range].range[0][curr_base_pg].pages
+            curr_rid = curr_pages[1][curr_page].retrieve(curr_record)
+            # Check indirection
+            curr_ind = 512*curr_page + curr_record
+            curr_schema = curr_pages[3][curr_ind]
+            # if the column has been updated
+            if curr_rid >= b_rid and curr_rid <= e_rid:
+                if int(curr_schema[column]):
+                    curr_indirection = curr_pages[0]
+                    tail_rid     = curr_indirection[curr_rid]
+                    tail_p_range = curr_p_range
+                    tail_base_pg = tail_rid // 4096
+                    tail_page    = (tail_rid % 4096) // 512
+                    tail_record  = tail_rid % 512
+                    curr_val     = self.table.page_directory[tail_p_range].range[1][tail_base_pg].pages[column+4][tail_page].retrieve(tail_record)
+                    vals.append(curr_val)
+                else:
+                    curr_val = curr_pages[column+4][curr_page].retrieve(curr_record)
+                    vals.append(curr_val)
         return vals
 
     """

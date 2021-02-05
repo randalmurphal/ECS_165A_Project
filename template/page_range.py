@@ -12,7 +12,7 @@ class PageRange:
         pass
 
     def full(self):
-        return self.num_base_pages == 16
+        return self.num_base_pages >= 16
 
     def append_base_page(self,conceptual_page):
         self.num_base_pages += 1

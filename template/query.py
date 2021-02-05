@@ -58,8 +58,9 @@ class Query:
     """
     def delete(self, key):
         # Grab location of base record
-        ind = Index(self.table)
-        baseR_loc = ind.locate(key, 0, key)[0]
+        # ind = Index(self.table)
+        # baseR_loc = ind.locate(key, 0, key)[0]
+        baseR_loc = self.table.key_dict[key]
         baseR_p_range, baseR_base_pg, baseR_pg, baseR_rec = baseR_loc
         base_pages    = self.table.page_directory[baseR_p_range].range[0][baseR_base_pg].pages
         base_rid      = base_pages[1][baseR_pg].retrieve(baseR_rec)
@@ -149,6 +150,7 @@ class Query:
         location = (page_range_index, base_page_index, page_index, record_index)
         self.table.key_dict[key] = location
         self.table.RID_count += 1
+        new_base.num_records += 1
         return True
 
     """
@@ -181,18 +183,11 @@ class Query:
             tail_page_i  = (tail_rid % 65536) // 4096
             page_i       = (tail_rid % 4096) // 512
             tail_page    = self.table.page_directory[p_range].range[1][tail_page_i].pages
-            # print("columns:", columns)
             for i, col in enumerate(tail_page[4:]):
                 value = col[page_i].retrieve(tail_rid % 512)
-                # print("value:", value)
                 if value == MAX_INT:
                     columns[i] = base_pages[i+4][page].retrieve(record)
                 else:
-                    # print("page_i:",page_i)
-                    # print("tail_rid:", tail_rid)
-                    # print("i:", i)
-                    # print("len_cols:", columns)
-                    # print("query_cols:", query_columns)
                     columns[i] = col[page_i].retrieve(tail_rid % 512)
 
         rec = Record(rid, key, columns)
@@ -204,8 +199,6 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
-        # ind = Index(self.table)
-        # location = ind.locate(key, 0, key)
         location = self.table.key_dict[key] # Assume all keys have been inserted
 
         query_columns = []
@@ -216,12 +209,13 @@ class Query:
                 query_columns.append(0)
 
         record = self.select(key, 0, query_columns)
-        p_range_loc, b_page_loc, page_loc, record_loc = location[0]
+        p_range_loc, b_page_loc, page_loc, record_loc = location
 
         base_page  = self.table.page_directory[p_range_loc].range[0][b_page_loc].pages
 
         indirection = base_page[0]
-        base_schema = base_page[3][page_loc]
+        page_ind    = 512*page_loc + record_loc
+        base_schema = base_page[3][page_ind]
         record_rid  = base_page[1][page_loc].retrieve(record_loc)
         cols        = []
 
@@ -264,19 +258,15 @@ class Query:
             tail_pages[-1].pages[3].append(np.zeros(len(columns)))
         # Append to most recent tail page
         # If the last tail page is full
-        # print(tail_pages[-1].num_records)
         if tail_pages[-1].num_records % 512 == 0:
             for i, col in enumerate(tail_pages[-1].pages):
                 # Not indirection & schema
                 if not i == 0 and not i == 3:
                     col.append(Page())
         tail_page_i = tail_pages[-1].num_records // 512
-        # if not tail_page_i <=512 and not tail_page_i >= 0:
-        #     print(tail_page_i)
         tail_pages[-1].pages[4][tail_page_i].write(key)
         tail_pages[-1].num_records += 1
         # write column values into new tail page record
-        # print(len(tail_pages[-1].pages[5:]))
         for i, col in enumerate(tail_pages[-1].pages[5:]):
             col[tail_page_i].write(cols[i+1])
         # Update Indirection for tail page
