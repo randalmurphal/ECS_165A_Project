@@ -150,10 +150,10 @@ class Query:
         base_schema = base_pages[3][rec_i]
         indirection = base_pages[0]
 
-        columns = []
+        all_columns = []
         # populate with base page values
-        for i, col in enumerate(query_columns):
-            columns.append(base_pages[i+4][page].retrieve(record))
+        for i in range(len(query_columns)):
+            all_columns.append(base_pages[i+4][page].retrieve(record))
 
         # Grab updated values in tail page
         if rid in indirection.keys():
@@ -161,12 +161,18 @@ class Query:
             tail_page_i  = (tail_rid % 65536) // 4096
             page_i       = (tail_rid % 4096) // 512
             tail_page    = self.table.page_directory[p_range].range[1][tail_page_i].pages
+            # for i, col in enumerate(tail_page[4:]):
             for i, col in enumerate(tail_page[4:]):
                 value = col[page_i].retrieve(tail_rid % 512)
                 if value == MAX_INT:
-                    columns[i] = base_pages[i+4][page].retrieve(record)
+                    all_columns[i] = base_pages[i+4][page].retrieve(record)
                 else:
-                    columns[i] = col[page_i].retrieve(tail_rid % 512)
+                    all_columns[i] = col[page_i].retrieve(tail_rid % 512)
+
+        columns = []
+        for i, col in enumerate(query_columns):
+            if col:
+                columns.append(all_columns[i])
 
         rec = Record(rid, key, columns)
         return [rec]
