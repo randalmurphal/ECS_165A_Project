@@ -164,9 +164,7 @@ class Query:
             # for i, col in enumerate(tail_page[4:]):
             for i, col in enumerate(tail_page[4:]):
                 value = col[page_i].retrieve(tail_rid % 512)
-                if value == MAX_INT:
-                    all_columns[i] = base_pages[i+4][page].retrieve(record)
-                else:
+                if value != MAX_INT:
                     all_columns[i] = col[page_i].retrieve(tail_rid % 512)
 
         columns = []
