@@ -36,6 +36,7 @@ class Table:
         self.index = Index(self)
         self.RID_count = 0
         self.tail_RID  = 0
+        self.init_key  = 0
 
     def __merge(self):
         pass

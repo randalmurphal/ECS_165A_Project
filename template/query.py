@@ -70,6 +70,9 @@ class Query:
     """
     # Tuple of columns(Key,Value)
     def insert(self, *columns):
+        # bc sum function asks for 10,001 key, but only have 10k
+        if not self.table.init_key:
+            self.table.init_key = columns[0]
         new_page_range   = self.table.RID_count % 65536 == 0
         page_range_index = self.table.RID_count // 65536
         new_base_page    = self.table.RID_count % 4096 == 0
