@@ -14,7 +14,6 @@ class Index:
     """
     # returns the location of all records with the given value on column "column"
     """
-
     def locate(self, key, column, value):
         loc_vals = []
         key_dict = self.table.key_dict
@@ -31,15 +30,12 @@ class Index:
     """
     # Returns the RIDs of all records with values in column "column" between "begin" and "end"
     """
-
     def locate_range(self, begin, end, column):
         vals      = []
         key_dict  = self.table.key_dict
         b_loc     = key_dict[begin]
         b_p_range, b_base_pg, b_page, b_record = b_loc
-        # For when main asks for 10k + 1 key, but only inserted 10k keys
-        if end == self.table.init_key + self.table.RID_count:
-            end -= 1
+
         e_loc     = key_dict[end]
         e_p_range, e_base_pg, e_page, e_record = e_loc
 
@@ -74,13 +70,11 @@ class Index:
     """
     # optional: Create index on specific column
     """
-
     def create_index(self, column_number):
         pass
 
     """
     # optional: Drop index of specific column
     """
-
     def drop_index(self, column_number):
         pass

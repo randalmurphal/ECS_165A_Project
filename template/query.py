@@ -67,9 +67,6 @@ class Query:
     # Returns False if insert fails for whatever reason
     """
     def insert(self, *columns):
-        # bc sum function in main asks for 10,001 key, but only have 10k
-        if not self.table.init_key:
-            self.table.init_key = columns[0]
         new_page_range   = self.table.RID_count % MAX_PAGE_RANGE_SIZE == 0
         page_range_index = self.table.RID_count // MAX_PAGE_RANGE_SIZE
         new_base_page    = self.table.RID_count % MAX_BASE_PAGE_SIZE == 0

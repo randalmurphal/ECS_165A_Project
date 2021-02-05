@@ -32,7 +32,6 @@ class Table:
         self.key_dict = {}
         # Given RID, return a page based off of the RID
         self.RID_count = 0
-        self.init_key  = 0
 
     def __merge(self):
         pass

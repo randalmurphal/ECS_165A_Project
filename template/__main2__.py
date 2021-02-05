@@ -49,7 +49,7 @@ agg_time_0 = process_time()
 for i in range(0, num_iters, 100):
     start_value = 906659671 + i
     end_value = start_value + 100
-    result = query.sum(start_value, end_value, randrange(0, 5))
+    result = query.sum(start_value, end_value-1, randrange(0, 5))
 agg_time_1 = process_time()
 print("Aggregate 10k of 100 record batch took:\t\t", agg_time_1 - agg_time_0)
 
