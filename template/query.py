@@ -33,8 +33,6 @@ class Query:
     """
     def delete(self, key):
         # Grab location of base record
-        # ind = Index(self.table)
-        # baseR_loc = ind.locate(key, 0, key)[0]
         baseR_loc = self.table.key_dict[key]
         baseR_p_range, baseR_base_pg, baseR_pg, baseR_rec = baseR_loc
         base_pages    = self.table.page_directory[baseR_p_range].range[0][baseR_base_pg].pages
@@ -181,8 +179,7 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
-        location = self.table.key_dict[key] # Assume all keys have been inserted
-
+        # Figure out which columns we are updating
         query_columns = []
         for i, col in enumerate(columns):
             if col != None:
@@ -190,7 +187,7 @@ class Query:
             else:
                 query_columns.append(0)
 
-        record = self.select(key, 0, query_columns)
+        location = self.table.key_dict[key] # Assume all keys have been inserted
         p_range_loc, b_page_loc, page_loc, record_loc = location
 
         base_page  = self.table.page_directory[p_range_loc].range[0][b_page_loc].pages
