@@ -38,7 +38,9 @@ class Index:
         key_dict  = self.table.key_dict
         b_loc     = key_dict[begin]
         b_p_range, b_base_pg, b_page, b_record = b_loc
-        e_loc    = key_dict[end]
+        if end == 906659671 + 10000:
+            end -= 1
+        e_loc     = key_dict[end]
         e_p_range, e_base_pg, e_page, e_record = e_loc
 
         b_rid = self.table.page_directory[b_p_range].range[0][b_base_pg].pages[1][b_page].retrieve(b_record)

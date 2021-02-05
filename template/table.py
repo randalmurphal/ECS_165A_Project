@@ -25,17 +25,13 @@ class Table:
     """
     def __init__(self, name, num_columns, key):
         # Want a page per num_columns
-        # self.page_ranges = []
         self.name = name
         self.key = key
         # Key is an RID
         self.num_columns = num_columns
-        # Cols are RID,Indirection,Schema Encoding,TimeStamp,{num_columns}
         # Page_directory stores the basepages and to find the base page you want
-        # Base Pages: RID // 4906 , Physical Page:
         self.page_directory = []
         self.key_dict = {}
-        # Each time u create a base page store it in the page_directory
         # Given RID, return a page based off of the RID
         self.index = Index(self)
         self.RID_count = 0

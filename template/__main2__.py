@@ -8,7 +8,7 @@ db = Database()
 grades_table = db.create_table('Grades', 5, 0)
 query = Query(grades_table)
 keys = []
-num_iters = 1000
+num_iters = 10000
 
 insert_time_0 = process_time()
 for i in range(0, num_iters):
@@ -42,9 +42,9 @@ print("Selecting 10k records took:  \t\t\t", select_time_1 - select_time_0)
 
 # Measuring Aggregate Performance
 agg_time_0 = process_time()
-for i in range(0, num_iters, 10):
-    start_value = 906659671 + i
-    end_value = start_value + 100
+for i in range(0, num_iters, 100):
+    start_value = keys[i]#906659671 + i
+    end_value = keys[i+100] #start_value + 100
     result = query.sum(start_value, end_value, randrange(0, 5))
 agg_time_1 = process_time()
 print("Aggregate 10k of 100 record batch took:\t\t", agg_time_1 - agg_time_0)

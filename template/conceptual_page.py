@@ -39,8 +39,5 @@ class ConceptualPage:
     def get_page_num(self):
         return self.num_records % 4096 // 512
 
-    # def add_page(self, page):
-    #     self.pages.append(Page())
-
     def update_RID(self):
         pass

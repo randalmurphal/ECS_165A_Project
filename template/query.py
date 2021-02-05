@@ -30,31 +30,6 @@ class Query:
     column and the Schema encoding column.
       If the Base record is "Deleted" it will have all zeros in its Schema Encoding
       column AND STILL point towards a tail record through its indirection column.
-
-    Directions:
-    1. See if a Base Record exists for the given RID. If no Base record exists for the
-    given RID: Return False.
-
-    2. Check  the Base Record's Indirection column to see if it has ever been updated. If the
-    base record has never been updated proceed to step #3a, otherwise skip to step #4a
-
-    # IF THE BASE RECORD HAS NEVER BEEN UPDATED
-    3a. Create a new Tail Record in which all the data columns are NULL and the
-    schema encoding column is all zeros.
-    3b. Point the indirection column of the base record to the new Tail Record.
-    DO NOT UPDATE THE SCHEMA ENCODING COLUMN IN THE BASE RECORD; IT SHOULD REMAIN ALL ZEROS
-    3c. The Base Record is now set to be Deleted in the next merge due to it containing all
-    0s in the schema encoding column AND it's indirection column points to a tail record.
-
-    # IF THE BASE RECORD HAS BEEN UPDATED
-    4a. Create a New Tail Record in which all the data columns are NULL and the schema
-    encoding column is all zeros.
-    4b. Copy the indirection column of the Base Record and paste it into the Indirection
-    column of the New Tail Record.
-    4c. Edit the indrection column of the Base Record and point it to the New Tail Record.
-    4d. Set the schema encoding column of the Base Record to be all Zeros
-    4e. The Base Record is now set to be Deleted in the next merge due to it containing
-    all 0s in the schema encoding column AND it's indirection column points to a tail record.
     """
     def delete(self, key):
         # Grab location of base record
