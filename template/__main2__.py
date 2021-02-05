@@ -37,6 +37,7 @@ select_time_0 = process_time()
 for key in records:
     record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
     error = False
+    # Error when select doesn't return the correct values
     for i, column in enumerate(record.columns):
         if column != records[key][i]:
             error = True
@@ -61,6 +62,7 @@ for key in records:
         query.update(key, *updated_columns)
         record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
         error = False
+        # Gives error when value is not properly updated when selecting
         for j, column in enumerate(record.columns):
             if column != records[key][j]:
                 error = True
@@ -75,14 +77,12 @@ update_time_1 = process_time()
 """ SUM TEST """
 
 agg_time_0 = process_time()
-
 for i in range(0, num_iters, 100):
     c = randrange(0, grades_table.num_columns)
     r = sorted(sample(range(0, len(keys)), 2))
-
     start = start_key + i
     end   = start + 99
-
+    # Get index in keys so we can sum & test over same range of rid's (by key)
     start_ind = 0
     end_ind   = 0
     for i, val in enumerate(keys):
@@ -91,14 +91,13 @@ for i in range(0, num_iters, 100):
         elif val == end:
             end_ind = i
             break
-
+    # Get "correct" value to compare with our function
     column_sum = sum(map(lambda key: records[key][c], keys[start_ind: end_ind+1]))
     result = query.sum(keys[start_ind], keys[end_ind], c)
     if column_sum != result:
         print('sum error on [', keys[start_ind], ',', keys[end_ind], ']: ', result, ', correct: ', column_sum)
     elif testing:
         print('sum on [', keys[r[0]], ',', keys[r[1]], ']: ', column_sum)
-
 agg_time_1 = process_time()
 
 """ DELETE TEST """
@@ -116,6 +115,7 @@ for i in range(0, num_iters):
     schema = base_page[3][schema_ind]
     in_indirection = rid in indirection.keys()
     schema_zeros = schema.all() == np.zeros(grades_table.num_columns).all()
+    # Correct if schema enc col is all 0's and it exists in indirection
     correct = schema_zeros and in_indirection
     if not correct:
         print("Delete error on", key, ":", record.columns)
