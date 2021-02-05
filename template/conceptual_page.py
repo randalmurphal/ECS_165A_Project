@@ -13,11 +13,6 @@ class ConceptualPage:
     def __init__(self, columns):
         self.pages = []
         self.num_records = 0
-
-        # self.pages.append({}) # Indirection Column
-        # # self.pages.append([]) # Schema Encoding
-        # for i in range(1, len(columns) + 4):
-        #     self.add_column()
         self.add_columns(columns)
 
     def update_num_records(self,page):
@@ -30,11 +25,10 @@ class ConceptualPage:
         return False
 
     def add_columns(self, columns):
-        self.pages.append({})
+        self.pages.append({}) # Indirection column
         for i in range(1, len(columns) + 4):
             self.pages.append([Page()])
-
-        self.pages[3] = [np.zeros(len(columns))]
+        self.pages[3] = [np.zeros(len(columns))] # Schema Enc column
 
     def get_page_num(self):
         return self.num_records % 4096 // 512

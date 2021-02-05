@@ -105,7 +105,7 @@ class Query:
         current_time = datetime.now().time()
         time_val     = ""
         hour = 0
-        # Extract hour * 60, then add to minutes to get total current minute
+        # Extract hour * 60, then add to minutes to get total current time in minutes
         for digit in current_time.strftime("%H:%M"):
             if not digit == ":":
                 time_val = time_val + digit
@@ -151,7 +151,6 @@ class Query:
             tail_page_i  = (tail_rid % MAX_PAGE_RANGE_SIZE) // MAX_BASE_PAGE_SIZE
             page_i       = (tail_rid % MAX_BASE_PAGE_SIZE) // MAX_PHYS_PAGE_SIZE
             tail_page    = self.table.page_directory[p_range].range[1][tail_page_i].pages
-            # for i, col in enumerate(tail_page[4:]):
             for i, col in enumerate(tail_page[4:]):
                 value = col[page_i].retrieve(tail_rid % MAX_PHYS_PAGE_SIZE)
                 if value != MAX_INT:

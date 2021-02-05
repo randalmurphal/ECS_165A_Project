@@ -24,16 +24,13 @@ class Table:
     :param key: int             #Index of table key in columns
     """
     def __init__(self, name, num_columns, key):
-        # Want a page per num_columns
         self.name = name
         self.key = key
-        # Key is an RID
         self.num_columns = num_columns
-        # Page_directory stores the basepages and to find the base page you want
+        # Page_directory stores the basepages
         self.page_directory = []
         self.key_dict = {}
         # Given RID, return a page based off of the RID
-        self.index = Index(self)
         self.RID_count = 0
         self.init_key  = 0
 
