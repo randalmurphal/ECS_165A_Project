@@ -15,6 +15,8 @@ class ConceptualPage:
         self.num_records = 0
         self.add_columns(columns)
 
+        # Create rid value for base/tail pages
+
     def update_num_records(self,page):
         self.num_records += 1
 
