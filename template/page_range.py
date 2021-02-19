@@ -8,6 +8,7 @@ class PageRange:
         self.num_base_pages = 0
         self.num_tail_pages = 0
         self.tail_RID       = 0
+        self.queries        = []
 
     def return_page(self):
         pass

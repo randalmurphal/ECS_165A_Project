@@ -45,6 +45,7 @@ class Database():
 
     def close(self):
         # Write all changes to disk from bufferpool object
+        #Also merge?
         pass
 
     """

@@ -34,4 +34,5 @@ class Table:
         self.RID_count = 0
 
     def __merge(self):
+        
         pass
