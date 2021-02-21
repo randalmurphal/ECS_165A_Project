@@ -3,6 +3,7 @@ from index import Index
 from conceptual_page import ConceptualPage
 from page_range import PageRange
 from page import Page
+from bufferpool import BufferPool
 
 from datetime import datetime
 import numpy as np
@@ -20,9 +21,10 @@ class Query:
     Queries that succeed should return the result or True
     Any query that crashes (due to exceptions) should return False
     """
-
     def __init__(self, table):
         self.table = table
+        data = 'rip' #idk
+        self.bufferpool = BufferPool(data)
 
     """
     # internal Method

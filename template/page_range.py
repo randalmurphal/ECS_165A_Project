@@ -1,7 +1,7 @@
 
 class PageRange:
 
-    def __init__(self):
+    def __init__(self, table_name):
         # 1st index is for base pages
         # 2nd index is for tail pages
         self.range = [[],[]]
@@ -9,6 +9,7 @@ class PageRange:
         self.num_tail_pages = 0
         self.tail_RID       = 0
         self.queries        = []
+        self.tbl_name     = table_name
 
     def return_page(self):
         pass
