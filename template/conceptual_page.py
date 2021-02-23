@@ -16,7 +16,8 @@ class ConceptualPage:
         self.add_columns(columns)
         self.path = None
         self.isPinned = False
-
+        self.isDirty = False
+        self.path = None
         # Create rid value for base/tail pages
 
     def update_num_records(self,page):

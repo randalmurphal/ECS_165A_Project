@@ -60,7 +60,7 @@ class BufferPool():
         '''
 
 
-            table_name = './ECS165/'+ str(self.table.name)
+            table_name = './ECS165/'+ str(self.table_name)
             page_range_dir = table_name + '/PR' + str(self.meta_data.last_page_range)   # directory for page range
             concept_page_dir = page_range_dir + '/CP' + str(self.meta_data.last_base_page)   # subdirectory for conceptual
             column_directories = []
@@ -119,7 +119,7 @@ class BufferPool():
             loc_in_bufferpool = self.key_dict[key] # tuple of 
             insertion_base_page = 
             
-        
+
 
 
         myFile = self.meta_data.key_dir[key] #(table, page_range)
@@ -136,7 +136,7 @@ class BufferPool():
     '''
     def find_conceptual_page_for_query(self, key, query_type):
         '''
-        
+
         
 
         '''
@@ -155,12 +155,19 @@ class BufferPool():
             
             else:
                 self.meta_data.insertion_conceptual_page = self.read_from_disk(self.insertion_conceptual_page_path) 
-                self.add_base_page(self.meta_data.insertion_conceptual_page)
+                self.add_conceptual_page(self.meta_data.insertion_conceptual_page)
                 return 
         
-        else:    # IF QUERY IS SELECT OR ANYTHING OTHER THAN INSERT
+        elif query_type == "Update":
+            # FINISH PART FOR QUERY UPDATE
             if key in self.key_dict.keys():
-        
+
+        elif query_type == "Select":
+            # FINISH PART FOR QUERY SELECT
+
+
+        elif query_type == "Sum":
+            # FINISH PART FOR QUERY SUM 
 
 
                 
@@ -198,32 +205,46 @@ class BufferPool():
         pass
 
     def isFull(self):
-        return len(self.base_pages) >= 16
-
-
-    def dirtyPages(self):
-        pass
-        # If there are dirty pages in our bufferpool
+        return len(self.conceptual_pages) >= 16
 
     
-    def add_base_page(self, base_page):
-
+    def add_conceptual_page(self, conceptual_page):
+        '''
+        1. Check if the Bufferpool is full. If bufferpool is full, evict LRU Conceptual Page.
+        2. Insert new conceptual page at index 0
+        '''
         if self.isFull():
-            self.evict_page_range()
-
-            cache_record = pickle.load("some file path")
+            self.evict_conceptual_range()
+            self.conceptual_pages.insert(0, conceptual_page)
+            
         else:
-            # Pull from the disk
-        pass
+            self.conceptual_pages.insert(0, conceptual_page)
 
-    def evict_page_range(self):
 
-        if self.dirtyPages():
-            # Write back to the disk
-            pass
+    def evict_conceptual_page(self):
+        '''
+        Finds least recently used conceptual page in bufferpool that is NOT PINNED.
+        Determine if said conceptual page is dirty.
+        If conceptual page is dirty --> write it back to disk then remove it from bufferpool
+        If conceptual page is NOT dirty --> remove 
+        '''
+        
+        conceptual_page_to_evict = None
+        while conceptual_page_to_evict == None:
+            for i in range(15,0):
+                if self.conceptual_pages[i].isPinned:
+                    continue
+                else:
+                    conceptual_page_to_evict = conceptual_pages[i]
+                    break
+        
+        if conceptual_page_to_evict.isDirty:
+            self.write_to_disk(conceptual_page_to_evict, self.table_name)
+            self.conceptual_pages.remove(conceptual_page_to_evict)
+
+
         else:
-            # Do nothing
-            pass
+            self.conceptual_pages.remove(conceptual_page_to_evict)
 
 
 
@@ -232,11 +253,6 @@ class BufferPool():
 
 
 
-
-
-
-    def mess(self):
-        pass
 
 
 
