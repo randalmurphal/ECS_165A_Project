@@ -35,6 +35,7 @@ class Database():
         # BufferPool get the table, get new parameter for myTable??????????
         # Get myTable from our Query Object
         self.myBufferPool = BufferPool(myMetaData,myTable)
+        self.RID_count = 0
         pass
 
     def open(self, path):

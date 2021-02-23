@@ -8,13 +8,24 @@ INDIRECTION_COLUMN = 0
 RID_COLUMN = 1
 TIMESTAMP_COLUMN = 2
 SCHEMA_ENCODING_COLUMN = 3
+TPS_COLUMN = 4
+BASE_RID_COLUMN = 5
 
 # Database -> Tables of diff classes -> Page Range -> Column of Data(Pages)
 class Record:
     def __init__(self, rid, key, columns):
+        self.indirection = None
         self.rid = rid
+        self.time = None
+        self.schemaEncoding = None
+        self.TPS = None
+        self.baseRID = None
         self.key = key
         self.columns = columns
+
+        
+        
+        
 
 class Table:
 

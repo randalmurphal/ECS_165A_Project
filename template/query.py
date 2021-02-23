@@ -10,8 +10,8 @@ import numpy as np
 import math
 
 MAX_INT = int(math.pow(2, 63) - 1)
-MAX_PAGE_RANGE_SIZE = 65536
-MAX_BASE_PAGE_SIZE  = 4096
+MAX_PAGE_RANGE_SIZE = 4096
+MAX_BASE_PAGE_SIZE  = 512
 MAX_PHYS_PAGE_SIZE  = 512
 
 class Query:
@@ -63,6 +63,21 @@ class Query:
         new_base.pages[2][page_index].write(values[1])
         new_base.pages[3].append(np.zeros(len(new_base.pages) - 4))
 
+    def current_time():
+        current_time = datetime.now().time()
+        time_val     = ""
+        hour = 0
+        # Extract hour * 60, then add to minutes to get total current time in minutes
+        for digit in current_time.strftime("%H:%M"):
+            if not digit == ":":
+                time_val = time_val + digit
+            else:
+                hour = int(time_val) * 60
+                time_val = ""
+
+        time_val = int(time_val) + hour
+        return time_val
+
     """
     # Insert a record with specified columns
     # Return True upon succesful insertion
@@ -73,7 +88,26 @@ class Query:
 		1. Create a new empty page and add to disk
 		2. Read that page from disk into bufferpool
 		'''
+        # MAKE RECORD OBJECT FOR EASY HANDLING
         key = *columns[0]
+        current_RID = self.bufferpool.meta_data.curr_baseRID
+
+        # Add Record Meta Data to Record Object
+        record_to_insert = Record(current_RID, key, *columns[1:])
+        record_to_insert.indirection = MAX_INT
+        record_to_insert.time = self.current_time()
+        record_to_insert.schemaEncoding = np.zeros(len(*columns)) 
+        record_to_insert.TPS = MAX_INT
+        record_to_insert.baseRID = MAX_INT
+
+        # Find current page to insert record into
+        
+        findconceptualPage()
+
+
+
+        
+        
         new_page_range   = self.table.RID_count % MAX_PAGE_RANGE_SIZE == 0
         page_range_index = self.table.RID_count // MAX_PAGE_RANGE_SIZE
         new_base_page    = self.table.RID_count % MAX_BASE_PAGE_SIZE == 0
@@ -81,6 +115,9 @@ class Query:
         new_page         = self.table.RID_count % MAX_PHYS_PAGE_SIZE == 0
         page_index       = (self.table.RID_count % MAX_BASE_PAGE_SIZE) // MAX_PHYS_PAGE_SIZE
         record_index     = self.table.RID_count % MAX_PHYS_PAGE_SIZE
+        
+
+
 
         new_base  = ConceptualPage(columns)
         new_range = PageRange()
@@ -105,19 +142,8 @@ class Query:
         for i, col in enumerate(columns):
             new_base.pages[i+4][page_index].write(col)
 
-        # Get current time value
-        current_time = datetime.now().time()
-        time_val     = ""
-        hour = 0
-        # Extract hour * 60, then add to minutes to get total current time in minutes
-        for digit in current_time.strftime("%H:%M"):
-            if not digit == ":":
-                time_val = time_val + digit
-            else:
-                hour = int(time_val) * 60
-                time_val = ""
+        
 
-        time_val = int(time_val) + hour
         values = [self.table.RID_count, time_val]
         self.add_meta(new_base, page_index, values)
 
