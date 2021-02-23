@@ -1,57 +1,91 @@
 from config import *
 from Page import Page
+from table import Table
 import pickle
+import os
 
 class meta_data():
     # data = some tuple of info we can extract below
     def __init__(self, data):
         # curr_table & curr_page_range is the currently opened file
-        self.curr_table = 0
         self.curr_page_range = 0
+        self.curr_base_range = 0
+        self.curr_physical_range = 0
         # last_table & last_page_range keep track of the most recently created table and page_range
-        self.last_table = 0
         self.last_page_range = 0
+        self.last_base_range = 0
+        self.last_physical_range = 0
         # currently opened curr_baseRID and curr_tailRID
         self.curr_baseRID = 0
         self.curr_tailRID = 0
         # Key:(table,page_range)
+        # Might want to make this a file
         self.key_dir = {} #Which file to look at
-        # T1PR1
+        # T1PR1B1P1
 
 class BufferPool():
 
-    def __init__(self, meta_data):
+    def __init__(self, meta_data,table_name):
 
         # Fixed constant number of records allowed in bufferpool at any given time
+        # self.table = table
+        # Table1 -> Buffer(meta_data,Table1) Table2->Buffer(meta_data,Table2)
+        # self.table_name =
+        self.table_name = table_name
         self.meta_data     = meta_data(data)
         self.max_records   = 0
         # Might be amount of records
         self.cache_records = [] # The records currently undergoing transactions (the pages containing these records are PINNED)
         self.last_accessed = []
-        self.actual_page_ranges = []
+        self.actual_page_ranges = [] #Holds the page_ranges(this mimics a table)
         self.key_dict      = {} #Holds the record values
         self.last_page_ranges = {} # table name or something -> last page range index
 
-    def write_to_disk(self, page_range):
+    def write_to_disk(self, Record, table):
+        # Takes a record object to put information into appropriate column directory
         '''
             - Check to see if file exists
                 - if exists then want to write over file with updated data
                 - if doesnt exists then just create new file at last index
         '''
+            table_name = './ECS165/'+ str(self.table.name)
+            page_range_dir = table_name + '/PR' + str(self.meta_data.last_page_range)   # directory for page range
+            concept_page_dir = page_range_dir + '/CP' + str(self.meta_data.last_base_range)   # subdirectory for conceptual
+            column_directories = []
+            for i in LIST_OF_COLUMNS:
+                column_page_dir = concept_page_dir + '/Col_Num' + str(i)
+            physical_page_name =  concept_page_dir + '/PP' + str(self.meta_data.last_physical_range) +'.pkl' # path for physical page
+            path = physical_page_name
+            try:
+                os.mkdirs(concept_page_dir)
+            else:
+                print("Something directory already exists")
+            with open(path, 'w') as db_file:
+                # path = ./ECS165/Grades/PR1/CP1/Col_num1/PP1
+                pickle.dump("This thing comes from insert", db_file)
+
+
+    def update_to_disk(self):
+        '''
+        Opens up a page, then writes to it
+        /blah/conceptualpage/0
+        /blah/conceptualpage/1
+
+        '''
+        # Compile together N physical pages =(Location_Col0, Location_Col1, Location_Col2)
+        # Fetches us 1 physical Page Key: (Path, record num)
+        # Key:(path,record num)
         # Get arbitrary key in page_range to see which file it belongs to
+        # 1. Get the path, from key
+        key =
         key = page_range.range[0].pages[4][0].retrieve(0)
         if key in self.meta_data.key_dir.keys():
             loc  = self.meta_data.key_dir[key] # (table_name, page_range)
             path = './disk/'+loc[0]+'_PR'+str(loc[1])+'.pkl'
-        else:
-            'Figure out which '
-            t_name = page_range.tbl_name
-            self.last_page_ranges[t_name] += 1
-            pr_ind = self.last_page_ranges[t_name]
-            path = './disk/'+t_name+'_PR'+str(pr_ind)+'.pkl'
-
         with open(path, 'w') as db_file:
-            pickle.dump(page_range, db_file)
+            # path = ./ECS165/Grades/PR1/CP1/PP1
+            pickle.dump("This thing comes from insert", db_file)
+
 
     def read_from_disk(self, key):
         '''

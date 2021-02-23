@@ -21,10 +21,9 @@ class Query:
     Queries that succeed should return the result or True
     Any query that crashes (due to exceptions) should return False
     """
-    def __init__(self, table):
-        self.table = table
+    def __init__(self, bufferpool):
+        self.bufferpool = bufferpool
         data = 'rip' #idk
-        self.bufferpool = BufferPool(data)
 
     """
     # internal Method
@@ -47,6 +46,7 @@ class Query:
         indirection = base_pages[0]
         updated     = base_rid in indirection.keys()
         n_cols      = self.table.num_columns
+
         # If not updated, add tail page with MAX_INT vals and add to indirection
         if not updated:
             # Update to add tail page with None for all values
@@ -69,6 +69,11 @@ class Query:
     # Returns False if insert fails for whatever reason
     """
     def insert(self, *columns):
+		'''
+		1. Create a new empty page and add to disk
+		2. Read that page from disk into bufferpool
+		'''
+        key = *columns[0]
         new_page_range   = self.table.RID_count % MAX_PAGE_RANGE_SIZE == 0
         page_range_index = self.table.RID_count // MAX_PAGE_RANGE_SIZE
         new_base_page    = self.table.RID_count % MAX_BASE_PAGE_SIZE == 0
@@ -132,6 +137,10 @@ class Query:
     # Assume that select will never be called on a key that doesn't exist
     """
     def select(self, key, column, query_columns):
+		'''
+		1. Look at bufferpool, if exist -> perform select; else -> pull into bufferpool
+		2.
+		'''
         location = self.table.key_dict[key] # Assume all keys have been inserted
 
         p_range, base_pg, page, record = location

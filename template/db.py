@@ -1,5 +1,5 @@
 from table import Table
-
+from bufferpool import BufferPool, meta_data
 import pickle
 # Open/Close -- saving and loading from file with pickle
     # dont load the whole table when opening bc max bufferpool size
@@ -30,12 +30,18 @@ class Database():
 
     def __init__(self):
         self.tables = []
+        self.myTable = 'No Table'
+        self.myMetaData = meta_data()
+        # BufferPool get the table, get new parameter for myTable??????????
+        # Get myTable from our Query Object
+        self.myBufferPool = BufferPool(myMetaData,myTable)
         pass
 
     def open(self, path):
         ### init bufferpool object ###
         # try to open file, if doesnt exist create it
         try:
+            # ./ECS165
             with open(path, 'r') as db_file:
                 self.tables = pickle.load(path)
         except IOError:
@@ -56,7 +62,8 @@ class Database():
     """
     def create_table(self, name, num_columns, key):
         table = Table(name, num_columns, key)
-        self.tables.append(table)
+        os.mkdir("tableblah")
+        self.tables.append(name)
         return table
 
     """
@@ -72,4 +79,11 @@ class Database():
     # Returns table with the passed name
     """
     def get_table(self, name):
-        pass
+        self.myTable = name
+        self.myBufferPool = BufferPool(self.myMetaData,myTable)
+        # path = "./ECS165/" + name
+        # Have bufferpool open up the correct table directory
+        # Return the table with the passed name
+        # with open(path, 'r') as db_file:
+        #         self.tables = pickle.load(path)
+        return myBufferPool

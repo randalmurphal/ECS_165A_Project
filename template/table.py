@@ -27,7 +27,7 @@ class Table:
         self.name = name
         self.key = key
         self.num_columns = num_columns
-        # Page_directory stores the basepages
+        # Page_directory stores all the basepages
         self.page_directory = []
         self.key_dict = {}
         # Given RID, return a page based off of the RID
