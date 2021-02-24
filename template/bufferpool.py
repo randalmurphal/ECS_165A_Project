@@ -83,7 +83,7 @@ class BufferPool():
                     #  Will insert record_value into it's respective physical page
                      pickle.dump(record_values[i],db_file)
             
-            
+
 
 
     def update_to_disk(self,update_data,evicted_page):
@@ -130,27 +130,14 @@ class BufferPool():
             SIDE: Any time an insertion is completed and it fills up the current insertion base page: create new insertion base page
         '''
 
-        if key in self.key_dict.keys(): # INDICATES THAT WE WILL BE INSERTING A RECORD INTO THE PAGE WE ARE PULLING FROM MEMORY
-            loc_in_bufferpool = self.key_dict[key] # tuple of 
-            insertion_base_page = 
         # 1.Go to directory and then pull physical pages to create a conceptual page
-            myFile = self.meta_data.key_dir[key] #(table_name, page_range,concept_page)
-            # path = ./ECS165/Grades/PR1/CP1
-            path = './ECS165/' + myFile[0] + '/PR/' + str(myFile[1]) + '/CP/' + str(myFile[2])
-            # 2.Insert pages into conceptual_pages
-            with open(path,'r') as db_file:
-                conceptual_page = pickle.load(db_file)
-                self.conceptual_pages.insert(0,conceptual_page)
-            # 3.Add keys into key_dict
-                # Still need to do
+        myFile = self.meta_data.key_dir[key] #(table_name, page_range,concept_page)
+        # path = ./ECS165/Grades/PR1/CP1
+        path = './ECS165/' + myFile[0] + '/PR/' + str(myFile[1]) + '/CP/' + str(myFile[2])
         
-        '''
-        finds the conceptual page in disk corresponding to the key and returns it
-        
-        '''
-        path = self.meta_data.key_dir[key]
-
-
+        with open(path,'r') as db_file:
+            conceptual_page = pickle.load(db_file)
+            return conceptual_page
         
             
 
