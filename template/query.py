@@ -58,25 +58,7 @@ class Query:
 
         return True
 
-    def add_meta(self, new_base, page_index, values):
-        new_base.pages[1][page_index].write(values[0])
-        new_base.pages[2][page_index].write(values[1])
-        new_base.pages[3].append(np.zeros(len(new_base.pages) - 4))
 
-    def current_time():
-        current_time = datetime.now().time()
-        time_val     = ""
-        hour = 0
-        # Extract hour * 60, then add to minutes to get total current time in minutes
-        for digit in current_time.strftime("%H:%M"):
-            if not digit == ":":
-                time_val = time_val + digit
-            else:
-                hour = int(time_val) * 60
-                time_val = ""
-
-        time_val = int(time_val) + hour
-        return time_val
 
     """
     # Insert a record with specified columns
@@ -93,66 +75,53 @@ class Query:
         current_RID = self.bufferpool.meta_data.curr_baseRID
 
         # Add Record Meta Data to Record Object
-        record_to_insert = Record(current_RID, key, *columns[1:])
-        record_to_insert.indirection = MAX_INT
-        record_to_insert.time = self.current_time()
-        record_to_insert.schemaEncoding = np.zeros(len(*columns)) 
-        record_to_insert.TPS = MAX_INT
-        record_to_insert.baseRID = MAX_INT
+        new_record = Record(current_RID, key, *columns)
+        new_record.indirection = MAX_INT
+        new_record.time = self.current_time()
+        new_record.schemaEncoding = np.zeros(len(*columns)) 
+        new_record.TPS = MAX_INT
+        new_record.baseRID = MAX_INT
 
         # Find current page to insert record into
-        
-        
-
-
+        current_base_page = self.bufferpool.find_conceptual_page_for_query(None, "Insert")
 
         
-        
-        new_page_range   = self.table.RID_count % MAX_PAGE_RANGE_SIZE == 0
-        page_range_index = self.table.RID_count // MAX_PAGE_RANGE_SIZE
-        new_base_page    = self.table.RID_count % MAX_BASE_PAGE_SIZE == 0
-        base_page_index  = (self.table.RID_count % MAX_PAGE_RANGE_SIZE) // MAX_BASE_PAGE_SIZE
-        new_page         = self.table.RID_count % MAX_PHYS_PAGE_SIZE == 0
-        page_index       = (self.table.RID_count % MAX_BASE_PAGE_SIZE) // MAX_PHYS_PAGE_SIZE
-        record_index     = self.table.RID_count % MAX_PHYS_PAGE_SIZE
-        
+        if current_base_page.full(): # if latest base page we were inserting into is full
+            # Create a new base page
+            new_base_page = ConceptualPage(*columns)
 
+            # Mark new base page as pinned because we are performing a transaction on it
+            new_base_page.isPinned = True
 
+            # add created base page to bufferpool
+            self.bufferpool.add_conceptual_page(new_base_page)
 
-        new_base  = ConceptualPage(columns)
-        new_range = PageRange()
+            # Write record into the new base page, mark it as dirty
+            new_base_page.insert_record(new_record)
+            new_base_page.isDirty = True
 
-        if new_page_range:
-		    # create new page range
-            new_range.append_base_page(new_base)
-            self.table.page_directory.append(new_range)
-        else:
-            if new_base_page:
-                self.table.page_directory[page_range_index].append_base_page(new_base)
-            else:
-                if new_page:
-		            # append new page to current conceptualpage
-                    new_base = self.table.page_directory[page_range_index].range[0][base_page_index]
-                    for i in range(len(new_base.pages)):
-                        if not i == 0 and not i == 3:
-                            new_base.pages[i].append(Page())
-                else:
-                    new_base = self.table.page_directory[page_range_index].range[0][base_page_index]
+            # add record key into key index of bufferpool and key_dir of BF metadata
+            self.bufferpool.key_dict[new_record.key] = new_base_page
+            self.bufferpool.meta_data.insertion_conceptual_page = new_base_page
+            
+            # unpin both pages
+            current_base_page.isPinned = False
+            new_base_page.isPinned = False
 
-        for i, col in enumerate(columns):
-            new_base.pages[i+4][page_index].write(col)
+            
 
-        
+        else: # latest base page is not full
+            current_base_page.insert_record(new_record)
+            current_base_page.isDirty = True
+            self.bufferpool.key_dict[new_record.key] = current_base_page
 
-        values = [self.table.RID_count, time_val]
-        self.add_meta(new_base, page_index, values)
-
-        key      = columns[0]
-        location = (page_range_index, base_page_index, page_index, record_index)
-        self.table.key_dict[key] = location
+            current_base_page.isPinned = False
+            
         self.table.RID_count += 1
-        new_base.num_records += 1
+
+
         return True
+            
 
     """
     # Read a record with specified key
@@ -162,25 +131,42 @@ class Query:
     # Returns False if record locked by TPL
     # Assume that select will never be called on a key that doesn't exist
     """
-    def select(self, key, column, query_columns):
+   def select(self, key, column, query_columns):
 		'''
 		1. Look at bufferpool, if exist -> perform select; else -> pull into bufferpool
 		2.
 		'''
+        # Purpose of select: Return a record with most updated values
+            # 1. Get BasePage location
+            base_and_tail_page=  self.bufferpool.find_conceptual_page_for_query(key,'Select')
+            base_page = base_and_tail_page[0]
+            # 2. Get the BasePage values into all_columns
+            all_columns = []
+            for i in range(len(query_columns)):
+                all_columns.append(base_page[i+4][physical_page_loc].retrieve(record))
+            tail_page_location = self.bufferpool.find_conceptual_page_for_query(key,'Select')
+            # 3. Get the most updated values of TailPages
+                # 3.1 If TailPage has None values, get Base_page record
+            
         location = self.table.key_dict[key] # Assume all keys have been inserted
 
         p_range, base_pg, page, record = location
+        # Returns physical pages corresponding to base_page(AKA columns)
         base_pages = self.table.page_directory[p_range].range[0][base_pg].pages
+        # Get the RID column, then gets the value of the baseRID
         rid     = base_pages[1][page].retrieve(record)
+        # Gets the indirection column of base_page
         indirection = base_pages[0]
 
         all_columns = []
-        # populate with base page values
+        # populate with columns w/ base page values
         for i in range(len(query_columns)):
             all_columns.append(base_pages[i+4][page].retrieve(record))
 
         # Grab updated values in tail page
         if rid in indirection.keys():
+            # baseRID:tailRID
+            # 
             tail_rid     = indirection[rid]
             tail_page_i  = (tail_rid % MAX_PAGE_RANGE_SIZE) // MAX_BASE_PAGE_SIZE
             page_i       = (tail_rid % MAX_BASE_PAGE_SIZE) // MAX_PHYS_PAGE_SIZE
@@ -205,13 +191,30 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
-        # Figure out which columns we are updating
-        query_columns = []
-        for i, col in enumerate(columns):
-            if col != None:
-                query_columns.append(1)
-            else:
-                query_columns.append(0)
+        createSnapShot = False
+        def createSnapShot():
+            # Get Original value from schema encoding changed and then create a tail record for it
+
+        def createTailPage():
+            #1. Figure out which columns we are updating
+            query_colums = []
+            for i, col in enumerate(columns):
+                if col != None:
+                    query_columns.append(1)
+                else:
+                    query_columns.append(0)
+            # Figure out which columns we are updating
+            record = self.bufferpool.read_record()
+            #2. Get location of the base_page
+            # Note: We need to see if the key is in conceptual_pages first
+            conceptualPages = self.bufferpool.conceptual_pages
+            # Look through the conceptual_pages to see if the key is there
+                # If it get that record using key_dict?
+                # Else fetch that record from the disk in BufferPool
+            location = self.bufferpool.conceptual_pages[key]
+                # 2.1 Change Schema Encoding
+                # 2.2 Change Indirection Column
+
 
         location = self.table.key_dict[key] # Assume all keys have been inserted
         p_range_loc, b_page_loc, page_loc, record_loc = location
@@ -316,3 +319,20 @@ class Query:
             u = self.update(key, *updated_columns)
             return u
         return False
+
+
+
+    def current_time():
+        current_time = datetime.now().time()
+        time_val     = ""
+        hour = 0
+        # Extract hour * 60, then add to minutes to get total current time in minutes
+        for digit in current_time.strftime("%H:%M"):
+            if not digit == ":":
+                time_val = time_val + digit
+            else:
+                hour = int(time_val) * 60
+                time_val = ""
+
+        time_val = int(time_val) + hour
+        return time_val
