@@ -167,20 +167,37 @@ class Query:
 		1. Look at bufferpool, if exist -> perform select; else -> pull into bufferpool
 		2.
 		'''
+        # Purpose of select: Return a record with most updated values
+            # 1. Get BasePage location
+            base_and_tail_page=  self.bufferpool.find_conceptual_page_for_query(key,'Select')
+            base_page = base_and_tail_page[0]
+            # 2. Get the BasePage values into all_columns
+            all_columns = []
+            for i in range(len(query_columns)):
+                all_columns.append(base_page[i+4][physical_page_loc].retrieve(record))
+            tail_page_location = self.bufferpool.find_conceptual_page_for_query(key,'Select')
+            # 3. Get the most updated values of TailPages
+                # 3.1 If TailPage has None values, get Base_page record
+            
         location = self.table.key_dict[key] # Assume all keys have been inserted
 
         p_range, base_pg, page, record = location
+        # Returns physical pages corresponding to base_page(AKA columns)
         base_pages = self.table.page_directory[p_range].range[0][base_pg].pages
+        # Get the RID column, then gets the value of the baseRID
         rid     = base_pages[1][page].retrieve(record)
+        # Gets the indirection column of base_page
         indirection = base_pages[0]
 
         all_columns = []
-        # populate with base page values
+        # populate with columns w/ base page values
         for i in range(len(query_columns)):
             all_columns.append(base_pages[i+4][page].retrieve(record))
 
         # Grab updated values in tail page
         if rid in indirection.keys():
+            # baseRID:tailRID
+            # 
             tail_rid     = indirection[rid]
             tail_page_i  = (tail_rid % MAX_PAGE_RANGE_SIZE) // MAX_BASE_PAGE_SIZE
             page_i       = (tail_rid % MAX_BASE_PAGE_SIZE) // MAX_PHYS_PAGE_SIZE
@@ -205,13 +222,28 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
-        # Figure out which columns we are updating
-        query_columns = []
-        for i, col in enumerate(columns):
-            if col != None:
-                query_columns.append(1)
-            else:
-                query_columns.append(0)
+        def createSnapShot():
+            # Get Original value from schema encoding changed and then create a tail record for it
+        def createTailPage():
+            #1. Figure out which columns we are updating
+            query_colums = []
+            for i, col in enumerate(columns):
+                if col != None:
+                    query_columns.append(1)
+                else:
+                    query_columns.append(0)
+            # Figure out which columns we are updating
+            record = self.bufferpool.read_record()
+            #2. Get location of the base_page
+            # Note: We need to see if the key is in conceptual_pages first
+            conceptualPages = self.bufferpool.conceptual_pages
+            # Look through the conceptual_pages to see if the key is there
+                # If it get that record using key_dict?
+                # Else fetch that record from the disk in BufferPool
+            location = self.bufferpool.conceptual_pages[key]
+                # 2.1 Change Schema Encoding
+                # 2.2 Change Indirection Column
+
 
         location = self.table.key_dict[key] # Assume all keys have been inserted
         p_range_loc, b_page_loc, page_loc, record_loc = location

@@ -50,8 +50,13 @@ class BufferPool():
         self.last_page_ranges = {} # table name or something -> last page range index
 
 
-    def write_to_disk(self, BasePage, table):
-        # Writes a base page into disk
+    def write_to_disk(self,table,key_value,record_values):
+        '''
+        table = table_name given to us
+        key_value = the key given to us from insert
+        record_values = the columns in a conceptual page in array form
+        '''
+        # Writes a base page into disk, basically only on initalization of base page
 
         '''
             - Check to see if file exists
@@ -59,30 +64,34 @@ class BufferPool():
                 - if doesnt exists then just create new file at last index
         '''
 
-
+            # Get the key_value from insert
             table_name = './ECS165/'+ str(self.table.name)
-            page_range_dir = table_name + '/PR' + str(self.meta_data.last_page_range)   # directory for page range
-            concept_page_dir = page_range_dir + '/CP' + str(self.meta_data.last_base_page)   # subdirectory for conceptual
-            column_directories = []
-            for i in LIST_OF_COLUMNS:
-                column_page_dir = concept_page_dir + '/Col_Num' + str(i)
-            physical_page_name =  concept_page_dir + '/PP' + str(self.meta_data.last_physical_page) +'.pkl' # path for physical page
-            path = physical_page_name
+            page_range_dir = table_name + '/PR/' + str(self.meta_data.last_page_range)   # directory for page range
+            concept_page_dir = page_range_dir + '/CP/' + str(self.meta_data.last_base_page)   # subdirectory for conceptual
+            self.meta_data.key_dir[key_value] = (self.table.name,self.meta_data.last_page_range,self.meta_data.last_base_page)
+            # column_directories = []
             try:
                 os.mkdirs(concept_page_dir)
             else:
                 print("Something directory already exists")
-            with open(path, 'w') as db_file:
-                # path = ./ECS165/Grades/PR1/CP1/Col_num1/PP1
-                pickle.dump("This thing comes from insert", db_file)
+            for i in range(len(record_values)):
+                # Write into physical pages
+                 columns = concept_page_dir + '/PP/' + str(i) + '.pkl'
+                 # path = ./ECS165/Grades/PR1/CP1/PP1
+                 path = columns
+                 with open(path,'w') as db_file:
+                    #  Will insert record_value into it's respective physical page
+                     pickle.dump(record_values[i],db_file)
 
 
-    def update_to_disk(self):
+
+    def update_to_disk(self,update_data,evicted_page):
         '''
-        Opens up a page, then writes to it
-        /blah/conceptualpage/0
-        /blah/conceptualpage/1
+        Opens up a conceptual page, then writes values into the physical pages(these values come when conceptual pages are evicted)
+        ./ECS165/Grades/PR1/CP1/PP1
 
+        update_data = The data we want to add into the disk
+        evicted_page = The page that we evicted 
         '''
         # Compile together N physical pages =(Location_Col0, Location_Col1, Location_Col2)
         # Fetches us 1 physical Page Key: (Path, record num)
@@ -90,14 +99,22 @@ class BufferPool():
         # Get arbitrary key in page_range to see which file it belongs to
         # 1. Get the path, from key
 
-        
-        key = page_range.range[0].pages[4][0].retrieve(0)
-        if key in self.meta_data.key_dir.keys():
-            loc  = self.meta_data.key_dir[key] # (table_name, page_range)
-            path = './disk/'+loc[0]+'_PR'+str(loc[1])+'.pkl'
-        with open(path, 'w') as db_file:
-            # path = ./ECS165/Grades/PR1/CP1/PP1
-            pickle.dump("This thing comes from insert", db_file)
+        # 1. Get the key value of the conceptual_page being evicted or merge
+            # Note pages[4], the 4 is the col of key
+        key_of_page = evicted_page.pages[4][0].retrieve(0)
+        # 2. From here we can use the key_dir to get the location
+
+        if key_of_page in self.meta_data.key_dir.keys():
+            loc  = self.meta_data.key_dir[key_of_page] # (table_name, page_range,concept_page)
+            path = './ECS165/'+loc[0]+'/PR/'+str(loc[1])+ '/CP/' + str(loc[2])
+            # Go through the cols to write into the physical pages
+            for i in range(len(num_cols)):
+                # Goes into the appropriate physical page
+                columns = path + '/PP/' + str(i)
+                 # path = ./ECS165/Grades/PR1/CP1/PP1
+                with open(path, 'w') as db_file:
+                    # evicted_page.pages[i] will give you the proper page in ram
+                    pickle.dump(evicted_page.pages[i], db_file)
 
 
     def read_from_disk(self, key):
@@ -118,17 +135,16 @@ class BufferPool():
         if key in self.key_dict.keys(): # INDICATES THAT WE WILL BE INSERTING A RECORD INTO THE PAGE WE ARE PULLING FROM MEMORY
             loc_in_bufferpool = self.key_dict[key] # tuple of 
             insertion_base_page = 
-            
-        
-
-
-        myFile = self.meta_data.key_dir[key] #(table, page_range)
-        path   = './disk/T'+str(myFile[0])+'_PR'+str(myFile[1])+'.pkl'
-        with open(path, 'r') as db_file:
-            page_range = pickle.load(db_file)
-            self.add_page_range(page_range)
-        
-        return page
+        # 1.Go to directory and then pull physical pages to create a conceptual page
+            myFile = self.meta_data.key_dir[key] #(table_name, page_range,concept_page)
+            # path = ./ECS165/Grades/PR1/CP1
+            path = './ECS165/' + myFile[0] + '/PR/' + str(myFile[1]) + '/CP/' + str(myFile[2])
+            # 2.Insert pages into conceptual_pages
+            with open(path,'r') as db_file:
+                conceptual_page = pickle.load(db_file)
+                self.conceptual_pages.insert(0,conceptual_page)
+            # 3.Add keys into key_dict
+                # Still need to do
 
     '''
         reads value from bufferpool if exists,
@@ -142,7 +158,8 @@ class BufferPool():
         '''
 
         if query_type == "Insert"
-
+            # Write to disk
+            write_to_disk(self, BasePage, table)
             insertion_base_page = self.meta_data.insertion_conceptual_page
 
             insertion_base_page.isPinned = True  # marks base page as pinned because it is currently undergoing a transaction
@@ -158,9 +175,9 @@ class BufferPool():
                 self.add_base_page(self.meta_data.insertion_conceptual_page)
                 return 
         
-        else:    # IF QUERY IS SELECT OR ANYTHING OTHER THAN INSERT
+        elif query_type == "Select":    # IF QUERY IS SELECT OR ANYTHING OTHER THAN INSERT
             if key in self.key_dict.keys():
-        
+                return key_dict.get(key)
 
 
                 
@@ -178,9 +195,14 @@ class BufferPool():
         else:
             grab from bufferpool
         '''
-        if key in self.key_dict.keys(): #if page range is not in our bufferpool
+        # key_dict.keys(), gives us the keys currently in the bufferpool
+        # If the key is in the bufferpool
+        if key in self.key_dict.keys():
+            # key_dict.get(key), return a location(table,page_range,concept_page) 
+            return key_dict.get(key)
             # swap/add page range we need into bufferpool -> get_record(loc)
             self.add_page_range(key)
+        else:
 
         loc = self.key_dict[key] # (table, page_range, concept_page, page)
         return self.get_record(loc)
@@ -198,25 +220,12 @@ class BufferPool():
         pass
 
     def isFull(self):
-        return len(self.base_pages) >= 16
+        return len(self.conceptual_pages) >= 16
 
-
-    def dirtyPages(self):
-        pass
-        # If there are dirty pages in our bufferpool
-
-    
-    def add_base_page(self, base_page):
-
-        if self.isFull():
-            self.evict_page_range()
-
-            cache_record = pickle.load("some file path")
-        else:
-            # Pull from the disk
+    def add_conceptual_page(self, base_page):
         pass
 
-    def evict_page_range(self):
+    def evict_conceptual_page(self):
 
         if self.dirtyPages():
             # Write back to the disk
@@ -224,21 +233,6 @@ class BufferPool():
         else:
             # Do nothing
             pass
-
-
-
-    def update_dirty_pages(self):
-        pass
-
-
-
-
-
-
-    def mess(self):
-        pass
-
-
 
 #bufferpool class
     #starts w/ nothing
