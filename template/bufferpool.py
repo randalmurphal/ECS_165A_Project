@@ -22,7 +22,7 @@ class meta_data():
         # Might want to make this a file
         self.key_dir = {} #Which file to look at
 
-        self.newPageNecessary = False
+        
 
         # For Inserting Records
         self.insertion_conceptual_page = 
@@ -174,7 +174,7 @@ class BufferPool():
         elif query_type == "Update":
             # FINISH PART FOR QUERY UPDATE
             if key in self.key_dict.keys():
-
+            
         elif query_type == "Select":
             # FINISH PART FOR QUERY SELECT
 
@@ -182,8 +182,16 @@ class BufferPool():
         elif query_type == "Sum":
             # FINISH PART FOR QUERY SUM 
 
+        elif query_type == "Delete":
+            # FINISH PART FOR QUERY DELETE
+            if key in self.key_dict.keys():
+                return self.key_dict[key]
+            else:
+                base_page = self.read_from_disk(key)
+                self.add_conceptual_page(base_page)
+                return base_page
 
-                
+             
 
         base_page_index_in_bufferpool = 
 
