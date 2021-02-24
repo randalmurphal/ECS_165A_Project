@@ -36,27 +36,46 @@ class Query:
       column AND STILL point towards a tail record through its indirection column.
     """
     def delete(self, key):
-        # Grab location of base record
-        baseR_loc = self.table.key_dict[key]
-        baseR_p_range, baseR_base_pg, baseR_pg, baseR_rec = baseR_loc
-        base_pages    = self.table.page_directory[baseR_p_range].range[0][baseR_base_pg].pages
-        base_rid      = base_pages[1][baseR_pg].retrieve(baseR_rec)
-        base_schema_i = MAX_PHYS_PAGE_SIZE*baseR_pg + baseR_rec
-        # Check indirection column to see if has been updated
-        indirection = base_pages[0]
-        updated     = base_rid in indirection.keys()
-        n_cols      = self.table.num_columns
+        '''
+        1. Grab base page containing the record we want to delete through bufferpool and pin it.
+        2. Delete the record
+        3. Mark the base page as dirty
+        4. Unpin the base page
 
+        
+
+        '''
+
+        base_page = self.bufferpool.find_conceptual_page_for_query(None, "Delete")
+        # Pin Base Page
+        base_page.isPinned = True
+
+        # Grab location of base record
+        record_num_in_base_page = self.bufferpool.meta_data.key_dir[-1]
+        # Grab record RID so we can check if record has been updated
+        record_RID = base_page.pages[1].retrieve(record_num_in_base_page)
+        # Grab indirection column for base page
+        indirection = base_page_for_deletion.pages[0]
+        # Check if record has been updated previously
+        updated = record_RID in indirection.keys()
+        n_cols = self.table.num_columns
+        
         # If not updated, add tail page with MAX_INT vals and add to indirection
         if not updated:
-            # Update to add tail page with None for all values
+            # Update to add tail page with MAX_INT for all values
             self.update(key, *[None]*n_cols)
         else:
-            # Change base schema to all 0's, then update which gives None tail page
-            base_pages[3][base_schema_i] = np.zeros(n_cols)
+            # Change schema encoding for base record to all 0's, then update to add tail page with MAX_INT for all values
+            base_page.pages[3][record_num_in_base_page] = np.zeros(n_cols)
             self.update(key, *[None]*n_cols)
+        
+        # Mark base page as dirty
+        base_page.isDirty = True
+        # Unpin base page
+        base_page.isPinned = False
 
         return True
+        
 
 
 
@@ -87,6 +106,7 @@ class Query:
 
         
         if current_base_page.full(): # if latest base page we were inserting into is full
+
             # Create a new base page
             new_base_page = ConceptualPage(*columns)
 
@@ -100,13 +120,22 @@ class Query:
             new_base_page.insert_record(new_record)
             new_base_page.isDirty = True
 
+            # update meta data for bufferpool
+
+            if self.bufferpool.meta_data.last_base_page = 16: # last page range full => increment last page range and reset last base page to 1
+                self.bufferpool.meta_data.last_page_range += 1
+                self.bufferpool.meta_data.last_base_page = 1
+            else:                                             # last page range not full => increment last base page
+                self.bufferpool.meta_data.last_base_page += 1
+            
             # add record key into key index of bufferpool and key_dir of BF metadata
             self.bufferpool.key_dict[new_record.key] = new_base_page
-            self.bufferpool.meta_data.insertion_conceptual_page = new_base_page
+            self.bufferpool.meta_data.insertion_conceptual_page = 'DO WE NEED TO UPDATE THIS HERE?'
             
             # unpin both pages
             current_base_page.isPinned = False
             new_base_page.isPinned = False
+
 
             
 

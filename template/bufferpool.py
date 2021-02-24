@@ -8,12 +8,12 @@ class meta_data():
     # data = some tuple of info we can extract below
     def __init__(self, data):
         # curr_table & curr_page_range is the currently opened file
-        self.curr_page_range = 0
-        self.curr_base_range = 0
+        self.curr_page_range = 1
+        self.curr_base_range = 1
         self.curr_physical_page = 0
         # last_table & last_page_range keep track of the most recently created table and page_range
-        self.last_page_range = 0
-        self.last_base_page = 0
+        self.last_page_range = 1
+        self.last_base_page = 1
         self.last_physical_page = 0 # THIS WILL BE THE PATH TO THE 
         # currently opened curr_baseRID and curr_tailRID
         self.curr_baseRID = 0
