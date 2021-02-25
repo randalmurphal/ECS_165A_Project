@@ -26,7 +26,7 @@ class ConceptualPage:
         self.num_records += 1
 
     def full(self):
-        if self.num_records >= 4096:
+        if self.num_records >= 512:
             return True
         # Check if Full, so if bytes go over 4096 or 4 KB
         return False
@@ -34,11 +34,11 @@ class ConceptualPage:
     def add_columns(self, columns):
         self.pages.append({})
         for i in range(1, len(columns) + 6):
-            self.pages.append([Page()])
+            self.pages.append(Page())
             self.pages[3] = [np.zeros(len(columns))]
 
-    def get_page_num(self):
-        return self.num_records % 4096 // 512
+    # def get_page_num(self):
+    #     return self.num_records % 4096 // 512
 
-    def update_RID(self):
-        pass
+    # def update_RID(self):
+    #     pass

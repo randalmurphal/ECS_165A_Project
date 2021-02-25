@@ -33,12 +33,13 @@ class MetaData():
         # self.insertion_conceptual_page_path =
 
 class BufferPool():
+
     def __init__(self, table_name):
         self.meta_data = MetaData()
         self.max_capacity = 16
         self.capacity = 0
         # self.array = [None] * self.max_capacity #array of pages
-    #    self.array=[]
+        # self.array=[]
         self.conceptual_pages = []
         self.buffer_keys = {}
         self.next_evict = 0
@@ -54,6 +55,7 @@ class BufferPool():
                 self.array[i] = temp_page
                 self.capacity += 1
                 return i
+
     def createConceptualPage(self, path, columns):
         #1. Collect physical pages from array the conceptual page
         my_conceptual_page = ConceptualPage()
@@ -66,15 +68,18 @@ class BufferPool():
         ### Check if bufferpool is full & evict if necessary ###
         # Check if conceptual_pages length > limit
         if len(self.conceptual_pages) >= self.max_capacity:
-            # 1.Write to disk
-            # 2.Kick out conceptual_page
             self.evict()
-
+        self.add_keys(conceptualPage)
         self.conceptual_pages.append(conceptualPage)
 
-
-    def populateConceptualPage(self, values, conceptualPage):
+    # Adds new record values to a conceptual page
+    def populateConceptualPage(self, columns, conceptualPage):
+        #
         ### TODO: Make work with values instead of record ###
+        offset = 6
+        for i in range(0, len(columns)):
+            conceptualPage.pages[i + offset].write(columns[i])
+        return True
         # conceptualPage.pages[1].write(record.rid)
         # conceptualPage.pages[2].write(record.time)
         # conceptualPage.pages[3].append(np.zeros(len(base_page.pages) - 6))
@@ -84,15 +89,14 @@ class BufferPool():
         #     conceptualPage.pages[i+6].write(col)
         #
         # self.num_records += 1
-
+        pass
     ### Assuming pages stack will be LRU at top of stack (index 0)
     def evict(self):   #evict a physical page from bufferpool (LRU)
         # Write to disk whatever is at the top of stack
         temp_cpage = self.conceptual_pages.pop(0)
+        self.remove_keys(temp_cpage)
         with open(temp_cpage.path, 'wb') as db_file:
             pickle.dump(temp_cpage, path)
-
-
 
     #def commit(self):  #commit changes in bufferpool to memory
 
@@ -109,8 +113,20 @@ class BufferPool():
                 with open(value.path, 'wb') as db_file:
                     pickle.dump(value,db_file)
 
+
+    def remove_keys(self, conceptual_page):
+        for i in range(conceptual_page.num_records):
+            key_i = conceptual_page.pages[6].retrieve(i)
+            del self.buffer_keys[key_i]
+
+    def add_keys(self, conceptual_page):
+        for i in range(conceptual_page.num_records):
+            key_i = conceptual_page.pages[6].retrieve(i)
+            self.buffer_keys[key_i] = conceptual_page
+
+'''
     def merge(self):
-        '''
+
         1.  Identify which tail pages are to be merged:
         Possible methods for this:
             - Tail page records we are merging should be consecutive
@@ -121,7 +137,7 @@ class BufferPool():
             - Create copies, NOT references to the original base pages
         3. Consolide (actually do the fucking merge)
         4. Update the key_dir in bufferpool metadata to ensure
-        '''
+
 
         merge_base_pages, merge_tail_pages = identify_pages_to_merge()
 
@@ -135,23 +151,25 @@ class BufferPool():
             merge_base_pages=[]
             merge_tail_pages=[]
             for conceptual_page  in # BP directory :
-                if conceptual_page.pages[3]== 1 :
+                #look at schema encoding column
+                for i in range(0,8):
+                    if conceptual_page.pages[3].retrieve(i)== 1 :
 
-                    if conceptual_page in merge_base_pages:
-                        continue
-                    else:
-                        merge_base_pages.append(conceptual_page)
-                    #find tail pages associated w/ this  base pages
-                    # ignore the tail page if we already have it in our list
-                    #otherwise append
-                    #PLACEHOLDER CODE
-                    tail_page_path = conceptual_page.pages[0]
-                    tail_page= tail_page_path[0]
-                    if tail_page in merge_tail_pages:
-                        continue
-                    else:
-                        merge_tail_pages.append(tail_page)
-            return merge_base_pages, merge_tail_pages
+                        if conceptual_page in merge_base_pages:
+                            continue
+                        else:
+                            merge_base_pages.append(conceptual_page)
+                        #find tail pages associated w/ this  base pages
+                        # ignore the tail page if we already have it in our list
+                        #otherwise append
+                        #PLACEHOLDER CODE
+                        tail_page_path = conceptual_page.pages[0].retrieve()
+                        tail_page = tail_page_path[0]
+                        if tail_page in merge_tail_pages:
+                            continue
+                        else:
+                            merge_tail_pages.append(tail_page)
+                return merge_base_pages, merge_tail_pages
 
 
         #key:rid value:path to tail page
@@ -201,3 +219,10 @@ class BufferPool():
                     else:
                         # writes the new value into the base record
                         base_page_containing_base_record.pages[column_num].overWrite(base_record_num, new_value)
+        # after consolidating, update key_directory
+        for base_page in merge_base_pages:
+
+                # after consolidating , update key page_directory
+        def update_key_dict(mergedBasePages)
+            self.buffer_pool.metadata.key_dict[key]= ?...
+'''

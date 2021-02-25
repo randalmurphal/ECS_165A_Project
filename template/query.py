@@ -62,35 +62,42 @@ class Query:
     #
     #     return True
 
-    def add_meta(self, new_base, page_index, values):
-        new_base.pages[1][page_index].write(values[0])
-        new_base.pages[2][page_index].write(values[1])
-        new_base.pages[3].append(np.zeros(len(new_base.pages) - 4))
-
-    def new_add_meta(self, path): #path is path to the base page
-        # Take the path
-        temp_page = Page()
-        with open(path+"RID", 'wb') as db_file:
-            pickle.dump(temp_page, db_file)
-        with open(path+"TIMESTAMP", 'wb') as db_file:
-            pickle.dump(temp_page, db_file)
-        with open(path+"SCHEMA", 'wb') as db_file:
-            pickle.dump(temp_page, db_file)
-        i = self.buffer_pool.load(path+"RID")
-        self.buffer_pool.array[i].write(self.table.RID_count)
-        self.buffer_pool.array[i].setPath(path+"RID")
-        i = self.buffer_pool.load(path+"TIMESTAMP")
-        self.buffer_pool.array[i].write(0)
-        self.buffer_pool.array[i].setPath(path+"TIMESTAMP")
-        i = self.buffer_pool.load(path+"SCHEMA")
-        self.buffer_pool.array[i].write(0)
-        self.buffer_pool.array[i].setPath(path+"SCHEMA")
+    # def add_meta(self, new_base, page_index, values):
+    #     new_base.pages[1][page_index].write(values[0])
+    #     new_base.pages[2][page_index].write(values[1])
+    #     new_base.pages[3].append(np.zeros(len(new_base.pages) - 4))
+    #
+    # def new_add_meta(self, path): #path is path to the base page
+    #     # Take the path
+    #     temp_page = Page()
+    #     with open(path+"RID", 'wb') as db_file:
+    #         pickle.dump(temp_page, db_file)
+    #     with open(path+"TIMESTAMP", 'wb') as db_file:
+    #         pickle.dump(temp_page, db_file)
+    #     with open(path+"SCHEMA", 'wb') as db_file:
+    #         pickle.dump(temp_page, db_file)
+    #     i = self.buffer_pool.load(path+"RID")
+    #     self.buffer_pool.array[i].write(self.table.RID_count)
+    #     self.buffer_pool.array[i].setPath(path+"RID")
+    #     i = self.buffer_pool.load(path+"TIMESTAMP")
+    #     self.buffer_pool.array[i].write(0)
+    #     self.buffer_pool.array[i].setPath(path+"TIMESTAMP")
+    #     i = self.buffer_pool.load(path+"SCHEMA")
+    #     self.buffer_pool.array[i].write(0)
+    #     self.buffer_pool.array[i].setPath(path+"SCHEMA")
 
 
 
     def create_pr_dir(self):
         os.mkdir(os.path.join('ECS165/'+self.table.name, "/PR"+str(self.buffer_pool.meta_data.currpr)))  #insert new PR and BP into disk
         os.mkdir(os.path.join('ECS165/'+self.table.name+"/PR" +str(self.buffer_pool.meta_data.currpr))) # , "BP" + str(self.buffer_pool.meta_data.currbp) ))
+
+    # Checks to see if path is in bufferpool already
+    def in_buffer(self, path):
+        for cpage in self.buffer_pool.conceptual_pages:
+            if cpage.path == path:
+                return cpage, True
+        return None, False
 
     """
     # Insert a record with specified columns
@@ -99,105 +106,37 @@ class Query:
     """
     # Tuple of columns(Key,Value)
     def insert(self, *columns):
-        new_page_range   = self.buffer_pool.meta_data.baseRID_count % 65536 == 0
-        page_range_index = self.buffer_pool.meta_data.baseRID_count  // 65536
-        new_base_page    = self.buffer_pool.meta_data.baseRID_count  % 512 == 0
-        base_page_index  = (self.buffer_pool.meta_data.baseRID_count  % 65536) // 512
-        new_page         =
-        
-        record_index     = self.buffer_pool.baseRID_count % 512
-
-
+        new_page_range = self.buffer_pool.meta_data.baseRID_count  % MAX_PAGE_RANGE_SIZE == 0
+        new_base_pag   = self.buffer_pool.meta_data.baseRID_count  % MAX_PHYS_PAGE_SIZE  == 0
+        new_page       = self.buffer_pool.meta_data.baseRID_count  % MAX_PHYS_PAGE_SIZE  == 0
+        page_index     = (self.buffer_pool.meta_data.baseRID_count % MAX_BASE_PAGE_SIZE) // MAX_PHYS_PAGE_SIZE
+        record_index   = self.buffer_pool.baseRID_count % MAX_PHYS_PAGE_SIZE
+        path = './ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
+        key  = columns[0]
         # if we need to create a new page range
         if new_page_range:
             self.create_pr_dir()
-            path = 'ECS165/'+self.table.name+"/PR"+str(self.buffer_pool.meta_data.currpr) + "/BP" + str(self.buffer_pool.meta_data.currbp)   #path to this new base page we want to insert our values into
-            self.buffer_pool.meta_data.currpr += 1  #keeps track of pr and bp we insert to
+            #keeps track of pr and bp we insert to
+            self.buffer_pool.meta_data.currpr += 1
             self.buffer_pool.meta_data.currbp += 1
-            self.buffer_pool.createConceptualPage(path, columns) # with new values written in
+            # with new values written in
+            self.buffer_pool.createConceptualPage(path, columns)
         else:
             # if need new conceptual page, create in currpr directory
             if new_base_page:
-                path = 'ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
                 self.buffer_pool.meta_data.currbp += 1
                 self.buffer_pool.createConceptualPage(path, columns)
             else:
+                # cpage = self.getBasePage(path)
+                cpage, is_in_buffer = self.in_buffer(path)
+                if not is_in_buffer:
+                    cpage = self.get_base_page(key, path)
 
-            # If there's an available spot in BufferPool, and the conceptual page is free
-            # Append to the end of the conceptual page the record
-            # Otherwise if the conceptual_page is full, then create a new one
+                self.buffer_pool.populateConceptualPage(columns, cpage)
+                self.buffer_pool.addConceptualPage(cpage)
 
 
-
-
-            # temp_page = Page()
-            # #create column pages, bring into bp, write data
-            # for i, col in enumerate(columns):
-            #     with open(path+"Column"+str(i), 'wb') as db_file:
-            #         pickle.dump(temp_page, db_file)
-            #     j = self.buffer_pool.load(path+"Column"+str(i))  #bufferpool.load loads page from memory into bufferpool and returns index in bufferpool array where page we want is
-            #     self.buffer_pool.array[j].write(col)   #load the page we just put into disk into bufferpool
-            #     self.buffer_pool.array[j].setPath(path+"Column"+str(i))
-        # else:
-        #     if new_base_page:
-        #         " ------ NEW CODE -------"
-        #         self.buffer_pool.meta_data.currbp += 1
-        #         os.mkdir(os.path.join('ECS165/'+self.table.name+"/PR"+str(self.buffer_pool.meta_data.currpr), "BP"+str(self.buffer_pool.meta_data.currbp) )) #create new bp
-        #         temp_page = Page()
-        #         path = 'ECS165/'+self.table.name+"/PR"+str(self.buffer_pool.meta_data.currpr)+ "/BP" + str(self.buffer_pool.meta_data.currbp) + '/'   #path to bp we want to insert into
-        #         self.new_add_meta(path)
-        #         #create column pages, bring into bp, write data
-        #         for i, col in enumerate(columns):
-        #             with open(path+"Column"+str(i), 'wb') as db_file:
-        #                 pickle.dump(temp_page, db_file)
-        #             j = self.buffer_pool.meta_data.bufferpool.load(path+"Column"+str(i))
-        #             self.buffer_pool.array[j].write(col)
-        #             self.buffer_pool.array[j].setPath(path+"Column"+str(i))
-        #
-        #     else:
-        #         "----- NEW ------"
-        #         #check if the page is in bufferpool, if it is then insert into the page, otherwise we need to pull that page from disk
-        #         path = 'ECS165/'+self.table.name+"/PR"+str(self.buffer_pool.meta_data.currpr)+ "/BP" + str(self.buffer_pool.meta_data.currbp) + '/' #path is base page we are inserting to
-        #         for i, col in enumerate(columns):
-        #             index = self.buffer_pool.checkBuffer(path+"Column"+str(i))
-        #             if index >= 0: #if the page exists in bufferpool
-        #                 self.buffer_pool.array[index].write(col)
-        #                 self.buffer_pool.array[index].setPath(path+"Column"+str(i))
-        #             else: #if the page isnt in bufferpool, load it into bufferpool
-        #                 z = self.buffer_pool.load(path+"Column"+str(i))
-        #                 self.buffer_pool.array[z].write(col)
-        #                 self.buffer_pool.array[z].setPath(path+"Column"+str(i))
-                #now add meta data, dont use new_add_meta because that function creates new pages
-                "---RID---"
-                i = self.buffer_pool.checkBuffer(path+"RID")
-                if i >= 0:
-                    self.buffer_pool.array[i].write(self.table.RID_count)
-                    self.buffer_pool.array[i].setPath(path+"RID")
-                else:
-                    c = self.buffer_pool.load(path+"RID")
-                    self.buffer_pool.array[c].write(self.table.RID_count)
-                    self.buffer_pool.array[c].setPath(path+"RID")
-                "---TIMESTAMP---"
-                i = self.buffer_pool.checkBuffer(path+"TIMESTAMP")
-                if i >= 0:
-                    self.buffer_pool.array[i].write(0)
-                    self.buffer_pool.array[i].setPath(path+"TIMESTAMP")
-                else:
-                    c = self.buffer_pool.load(path+"TIMESTAMP")
-                    self.buffer_pool.array[c].write(0)
-                    self.buffer_pool.array[c].setPath(path+"TIMESTAMP")
-                "---SCHEMA---"
-                i = self.buffer_pool.checkBuffer(path+"SCHEMA")
-                if i >= 0:
-                    self.buffer_pool.array[i].write(0)
-                    self.buffer_pool.array[i].setPath(path+"SCHEMA")
-                else:
-                    c = self.buffer_pool.load(path+"SCHEMA")
-                    self.buffer_pool.array[c].write(0)
-                    self.buffer_pool.array[c].setPath(path+"SCHEMA")
-
-        key      = columns[0]
-        location = (self.buffer_pool.meta_data.currpr, self.buffer_pool.meta_data.currbp, 0, record_index)
+        location = (self.buffer_pool.meta_data.currpr, self.buffer_pool.meta_data.currbp, page_index, record_index)
         self.buffer_pool.meta_data.key_dict[key] = location
         self.buffer_pool.meta_data.baseRID_count += 1
         return True
@@ -254,6 +193,69 @@ class Query:
         rec = Record(rid, key, columns)
         return [rec]
 
+    # 2. Get the base_page you want to update
+    def getBasePage(self, key, path=None):
+        if path == None:
+            # Is it in the bufferpool
+            if key in self.bufferpool.buffer_keys.keys():
+                # Get base_page from the buffer
+                my_base_page_path = self.bufferpool.buffer_keys[key]
+                # Check which base_page has the path
+                for cpage in self.bufferpool.conceptual_pages:
+                    if cpage.path == my_base_page_path:
+                        my_base_page = cpage
+                        break
+            # Is not in bufferpool, but in DISK
+            else:
+                my_base_page_location = self.meta_data.key_dict[key]
+                table_name = my_base_page_location[0]
+                page_range_loc = my_base_page_location[1]
+                base_page_loc = my_base_page_location[2]
+                # Open file, then return it
+                path = './ECS165/' +table_name + '/PR/' + page_range_loc + '/BP/'  + base_page_loc
+                with open(path,'rb') as db_file:
+                    my_base_page = pickle.load(db_file)
+                    # Add to bufferpool
+                    # Fetch value from disk and add that value to bufferpool
+            self.bufferpool.addConceptualPage(my_base_page)
+        else:
+            with open(path,'rb') as db_file:
+                my_base_page = pickle.load(db_file)
+
+        return my_base_page
+
+
+
+    # 1. Figure out which cols to update to
+    def colsToUpdate(self, key,*columns):
+        query_colums = []
+        for i, col in enumerate(columns):
+            if col != None:
+                query_columns.append(1)
+            else:
+                query_columns.append(0)
+        return query_columns
+
+
+    def get_tail_page_from_base(self, base_page):
+
+        indirection_column = base_page.pages[0]
+        RID_of_base_record = base_page.pages[1]
+        time_stamp_column = base_page.pages[2]
+        base_schema_column = base_page.pages[3]
+        tps_column = base_page.pages[4]
+        base_RID_column = base_page.pages[5]
+        key_column = base_page.pages[6]
+
+        # No tail page or full
+        if indirection_column[0] is None or tail_page.isFull():
+            tail_path = indirection_column[RID_of_base_record]
+            # Create a new tail page
+            # Add
+
+    def update_tail_page(self,tail_page,columns):
+        # get a tail_page and update it with columns
+        pass
     """
     # Update a record with specified key and columns
     # Returns True if update is succesful
@@ -261,26 +263,22 @@ class Query:
     """
     def update(self, key, *columns):
         """---New---"""
-        # 1. Figure out which cols to update to
-        def colsToUpdate(key,*columns):
-            query_colums = []
-                for i, col in enumerate(columns):
-                    if col != None:
-                        query_columns.append(1)
-                    else:
-                        query_columns.append(0)
-        # 2. Get the base_page you want to update
-        def getBasePage(key,*columns):
-            if key in self.bufferpool.buffer_keys.keys():
-                # Get base_page from the buffer
-                my_base_page_path = self.bufferpool.buffer_keys[key]
-                # Check which base_page has the path
-                for(x in self.bufferpool.buffer_ )
-            else:
-                #
-                my_base_page = self.meta_data.key_dict[key]
-                # Fetch value from disk and add that value to bufferpool
-            .path()
+        columns_to_update = self.colsToUpdate(key,columns)
+        my_base_page = self.getBasePage(key)
+        my_tail_page = self.get_tail_page_from_base(my_base_page,columns)
+        return self.update_tail_page(my_tail_page,columns)
+
+        # 3. Get tailPage
+        '''
+                3. If there is no tail page or full
+                3.1 Create a tail page and write it to disk
+                3.2 If there is a tail page
+                3.2.1 Go to the base_page's indirection col
+                Get the path, and also the record num
+        '''
+
+
+        # Get base_page, then (addConceptualPage) check if you need to evict to add to bufferpool
         """---OLD---"""
         location = self.table.key_dict[key] # Assume all keys have been inserted
         query_columns = []

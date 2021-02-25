@@ -34,6 +34,15 @@ class Page:
         # # Put the value into the next available space into self.data(this is an array of bytes)
         # self.num_records += 1
         # return True
+	def overWrite(self, value, record_num):
+		offset = record_num * 8
+		for i in int_to_bytes(value, 8):
+
+			self.data[offset] = i
+			offset = offset + 1
+
+		return True
+
 	def setPath(self,path):
 		self.path = path
 
