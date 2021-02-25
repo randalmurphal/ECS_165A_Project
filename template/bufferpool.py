@@ -3,6 +3,8 @@ from page import Page
 from conceptual_page import ConceptualPage
 import pickle
 import os
+import threading
+
 #we probably want meta data to be stored in the files
 class MetaData():
     # data = some tuple of info we can extract below
@@ -36,15 +38,16 @@ class MetaData():
 class BufferPool():
 
     def __init__(self, table_name):
-        self.meta_data = MetaData()
+        self.meta_data    = MetaData()
         self.max_capacity = 16
-        self.capacity = 0
+        self.capacity     = 0
         # self.array = [None] * self.max_capacity #array of pages
         # self.array=[]
         self.conceptual_pages = []
         self.buffer_keys = {}
-        self.next_evict = 0
-        self.table_name = table_name
+        self.next_evict  = 0
+        self.table_name  = table_name
+        self.merge_paths = []
 
     def load(self, path):      #loads page associated with path, returns index of bufferpool the loaded page is in
         if self.capacity == self.max_capacity:
@@ -93,6 +96,7 @@ class BufferPool():
         pass
     ### Assuming pages stack will be LRU at top of stack (index 0)
     def evict(self):   #evict a physical page from bufferpool (LRU)
+        ### check if value being evicted is pinned
         # Write to disk whatever is at the top of stack
         temp_cpage = self.conceptual_pages.pop(0)
         self.remove_keys(temp_cpage)
@@ -126,9 +130,14 @@ class BufferPool():
             key_i = conceptual_page.pages[6].retrieve(i)
             self.buffer_keys[key_i] = conceptual_page
 
-'''
-    def merge(self):
+    # Returns base & tail pages for merging
+    def id_merge_pages(self):
+        pass
 
+# '''
+    def merge(self):
+        # Update 8192 records
+        '''
         1.  Identify which tail pages are to be merged:
         Possible methods for this:
             - Tail page records we are merging should be consecutive
@@ -139,39 +148,76 @@ class BufferPool():
             - Create copies, NOT references to the original base pages
         3. Consolide (actually do the fucking merge)
         4. Update the key_dir in bufferpool metadata to ensure
-
-
-        merge_base_pages, merge_tail_pages = identify_pages_to_merge()
+        '''
+        merge_base_pages, merge_tail_pages = self.id_merge_pages()
 
         merge_RID_dir = copy.copy(self.buffer_pool.meta_data.key_dir)
         merge_RID_dict = {}
         # Identify base pages and tail pages we will be using during merge, add them to the appropriate arrays
 
+        # 2. Make a copy of those base_pages
+        # 3. Get tail_pages corresponding to the base_pages you want to merge
+            # 3.1 You can do this by using the BaseRID column(Which tells you which tail_page corresponding to the base_page)
+        # 4. If you have multiple tail_pages, use the most updated one
+        # 5. The base_page_copy's values then becomes the tail_pages value(iterate backwards)
+        # 1. Get the base_pages you want to merge (Based off of something)
+
+        full_base_pages = []
+        # Create a new thread for merge
+        # # update at x count
+        # merge_t = threading.Thread(target=merge)
+        # merge_t.start() # Starts running thread in background
+        # ret_val = merge_t.join() # waits until thread is done
+
+        def add_base_page(self,base_page):
+            # thread.full_base_pages.append(base_page)
+            pass
+        # 2. Make a copy of those base_pages
+        def create_copy_of_base(self):
+            pass
+        def create_copy_of_all_base(self,base_pages):
+            for(my_base_pages in base_pages):
+                #1. Add to a new path???
+                # New directory?
+
+        # Add full base_pages into the array?
+        # 3. Get tail_pages corresponding to the base_pages you want to merge
+            # 3.1 You can do this by using the BaseRID column(Which tells you which tail_page corresponding to the base_page)
+        def get_tail_pages(self):
+            pass
+        def update_base_page(self):
+            pass
         def identify_pages_to_merge():
+
+            #since tail and base pages are in the same folder
+            # we have to loop through every conceptual page and check if it's a base page
+            #then loop through schema encoding and see if it needs to be merged
+
+
             #if conceptual_page.pages[0]
             #check through all  base pages and  check if
             merge_base_pages=[]
             merge_tail_pages=[]
-            for conceptual_page  in # BP directory :
-                #look at schema encoding column
-                for i in range(0,8):
-                    if conceptual_page.pages[3].retrieve(i)== 1 :
-
-                        if conceptual_page in merge_base_pages:
-                            continue
-                        else:
-                            merge_base_pages.append(conceptual_page)
-                        #find tail pages associated w/ this  base pages
-                        # ignore the tail page if we already have it in our list
-                        #otherwise append
-                        #PLACEHOLDER CODE
-                        tail_page_path = conceptual_page.pages[0].retrieve()
-                        tail_page = tail_page_path[0]
-                        if tail_page in merge_tail_pages:
-                            continue
-                        else:
-                            merge_tail_pages.append(tail_page)
-                return merge_base_pages, merge_tail_pages
+            # for conceptual_page  in # BP directory :
+            #     #look at schema encoding column
+            #     for i in range(0,8):
+            #         if conceptual_page.pages[3].retrieve(i)== 1 :
+            #
+            #             if conceptual_page in merge_base_pages:
+            #                 continue
+            #             else:
+            #                 merge_base_pages.append(conceptual_page)
+            #             #find tail pages associated w/ this  base pages
+            #             # ignore the tail page if we already have it in our list
+            #             #otherwise append
+            #             #PLACEHOLDER CODE
+            #             tailRID, tail_page_path = conceptual_page.pages[0].retrieve()
+            #             tail_page = tail_page_path[0] #?
+            #             if tail_page in merge_tail_pages:
+            #                 continue
+            #             else:
+            #                 merge_tail_pages.append(tail_page)
+            #     return merge_base_pages, merge_tail_pages
 
 
         #key:rid value:path to tail page
@@ -180,7 +226,7 @@ class BufferPool():
 
 
 
-
+# Cliff merge code vvvv
 
         # add base record RIDs to local merge dict
         for base_page in merge_base_pages:
@@ -221,10 +267,11 @@ class BufferPool():
                     else:
                         # writes the new value into the base record
                         base_page_containing_base_record.pages[column_num].overWrite(base_record_num, new_value)
+
         # after consolidating, update key_directory
-        for base_page in merge_base_pages:
+        # for base_page in merge_base_pages:
 
                 # after consolidating , update key page_directory
-        def update_key_dict(mergedBasePages)
-            self.buffer_pool.metadata.key_dict[key]= ?...
-'''
+        # def update_key_dict(mergedBasePages)
+        #     self.buffer_pool.metadata.key_dict[key]= ?...
+# '''
