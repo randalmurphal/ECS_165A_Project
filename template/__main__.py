@@ -3,6 +3,7 @@ from query import Query
 from index import Index
 from time import process_time
 from random import choice, randrange, sample, randint
+import pickle
 
 # Student Id and 4 grades
 db = Database()
@@ -27,7 +28,6 @@ for i in range(0, num_iters):
 	keys.append(key)
 	# print('inserted', records[key])
 insert_time_1 = process_time()
-
 print("Inserting 10k records took:  \t\t\t", insert_time_1 - insert_time_0)
 
 # # Measuring update Performance

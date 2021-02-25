@@ -35,7 +35,7 @@ class ConceptualPage:
         self.pages.append({})
         for i in range(1, len(columns) + 6):
             self.pages.append(Page())
-            self.pages[3] = [np.zeros(len(columns))]
+        self.pages[3] = [np.zeros(len(columns))]
 
     # def get_page_num(self):
     #     return self.num_records % 4096 // 512

@@ -1,5 +1,6 @@
 from config import *
 from page import Page
+from conceptual_page import ConceptualPage
 import pickle
 import os
 #we probably want meta data to be stored in the files
@@ -7,7 +8,7 @@ class MetaData():
     # data = some tuple of info we can extract below
     def __init__(self):
         # curr_table & curr_page_range is the currently opened file
-        self.currpr = 0
+        self.currpr = -1
         self.currbp = 0
 
         self.curr_page_range = 0
@@ -56,12 +57,12 @@ class BufferPool():
                 self.capacity += 1
                 return i
 
-    def createConceptualPage(self, path, columns):
+    def createConceptualPage(self, path, columns=None):
         #1. Collect physical pages from array the conceptual page
-        my_conceptual_page = ConceptualPage()
-        my_conceptual_page.add_columns(columns)
+        my_conceptual_page = ConceptualPage(columns)
         my_conceptual_page.path = path
-        self.populateConceptualPage(columns, my_conceptual_page) ### TODO:
+        if columns != None:
+            self.populateConceptualPage(columns, my_conceptual_page) ### TODO:
         self.addConceptualPage(my_conceptual_page)
 
     def addConceptualPage(self, conceptualPage):
@@ -96,7 +97,8 @@ class BufferPool():
         temp_cpage = self.conceptual_pages.pop(0)
         self.remove_keys(temp_cpage)
         with open(temp_cpage.path, 'wb') as db_file:
-            pickle.dump(temp_cpage, path)
+            pickle.dump(temp_cpage, db_file)
+        # TypeError: file must have a 'write' attribute
 
     #def commit(self):  #commit changes in bufferpool to memory
 
