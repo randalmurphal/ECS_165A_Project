@@ -13,6 +13,8 @@ class ConceptualPage:
     def __init__(self, columns):
         self.pages = []
         self.num_records = 0
+        self.path = ''
+        # self.key_dict = {}
 
         # self.pages.append({}) # Indirection Column
         # # self.pages.append([]) # Schema Encoding
@@ -31,9 +33,9 @@ class ConceptualPage:
 
     def add_columns(self, columns):
         self.pages.append({})
-        for i in range(1, len(columns) + 4):
+        for i in range(1, len(columns) + 6):
             self.pages.append([Page()])
-        self.pages[3] = [np.zeros(len(columns))]
+            self.pages[3] = [np.zeros(len(columns))]
 
     def get_page_num(self):
         return self.num_records % 4096 // 512

@@ -41,7 +41,7 @@ class Table:
         self.RID_count = 0
         self.tail_RID  = 0
         self.init_key  = 0
-        self.bufferpool = BufferPool()
+        self.bufferpool = BufferPool(name)
 
     def __merge(self):
         pass
