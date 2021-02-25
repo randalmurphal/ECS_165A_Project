@@ -1,6 +1,7 @@
 from page import *
 from index import Index
 from time import time
+from bufferpool import BufferPool
 # from page_range import PageRange
 
 # These are indexes
@@ -8,24 +9,13 @@ INDIRECTION_COLUMN = 0
 RID_COLUMN = 1
 TIMESTAMP_COLUMN = 2
 SCHEMA_ENCODING_COLUMN = 3
-TPS_COLUMN = 4
-BASE_RID_COLUMN = 5
 
 # Database -> Tables of diff classes -> Page Range -> Column of Data(Pages)
 class Record:
     def __init__(self, rid, key, columns):
-        self.indirection = None
         self.rid = rid
-        self.time = None
-        self.schemaEncoding = None
-        self.TPS = None
-        self.baseRID = None
         self.key = key
         self.columns = columns
-
-        
-        
-        
 
 class Table:
 
@@ -34,16 +24,24 @@ class Table:
     :param num_columns: int     #Number of Columns: all columns are integer
     :param key: int             #Index of table key in columns
     """
-    def __init__(self, name, num_columns, key):
+    def __init__(self, name, num_columns, key): #when table is initialized we should
+        #need paths to current basepage (insert records into physical pages) and current page range (insert base pages intp page range)
+        self.currbp = 0
+        self.currpr = 0
+        # Want a page per num_columns
         self.name = name
         self.key = key
+        # Key is an RID
         self.num_columns = num_columns
-        # Page_directory stores all the basepages
+        # Page_directory stores the basepages and to find the base page you want
         self.page_directory = []
         self.key_dict = {}
         # Given RID, return a page based off of the RID
+        self.index = Index(self)
         self.RID_count = 0
+        self.tail_RID  = 0
+        self.init_key  = 0
+        self.bufferpool = BufferPool()
 
     def __merge(self):
-        
         pass

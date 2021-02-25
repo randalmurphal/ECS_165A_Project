@@ -1,15 +1,12 @@
 
 class PageRange:
 
-    def __init__(self, table_name):
+    def __init__(self):
         # 1st index is for base pages
         # 2nd index is for tail pages
         self.range = [[],[]]
         self.num_base_pages = 0
         self.num_tail_pages = 0
-        self.tail_RID       = 0
-        self.queries        = []
-        self.tbl_name     = table_name
 
     def return_page(self):
         pass
@@ -23,7 +20,6 @@ class PageRange:
 
     def append_tail_page(self,conceptual_page):
         # map our base pages to tail pages
-        self.num_tail_pages += 1
         self.range[1].append(conceptual_page)
 
     def merge(self,pages):

@@ -8,6 +8,8 @@ class Page:
 	def __init__(self):
 		self.num_records = 0
 		self.data = bytearray(4096)
+		# NEW, gonna need a self.path that tells us where this page is in disk
+		self.path = "default"
 
 	def full(self):
 		if self.num_records >= 512:
@@ -18,15 +20,30 @@ class Page:
 	def write(self, value):
 		offset = self.num_records * 8
 		for i in int_to_bytes(value, 8):
+			# try:
 			self.data[offset] = i
 			offset = offset + 1
+			# except IndexError:
+			# 	print("IndexError:", offset, self.num_records)
 		self.num_records += 1
 		return True
+
+        # # Write into the page the value
+        # self.data[self.num_records] = value
+        # #1) Convert to bytes
+        # # Put the value into the next available space into self.data(this is an array of bytes)
+        # self.num_records += 1
+        # return True
+	def setPath(self,path):
+		self.path = path
 
 	def retrieve(self, record_num):
 		offset = record_num * 8
 		temp = [0,0,0,0,0,0,0,0]
 		for i in range(0,8):
+			# try:
 			temp[i] = self.data[offset]
 			offset  = offset+1
+			# except IndexError:
+				# print("IndexError:", offset, self.num_records)
 		return int.from_bytes(temp,byteorder='big')

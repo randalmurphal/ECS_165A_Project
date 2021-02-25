@@ -1,58 +1,18 @@
 from table import Table
-from bufferpool import BufferPool, meta_data
-import pickle
-# Open/Close -- saving and loading from file with pickle
-    # dont load the whole table when opening bc max bufferpool size
-    # Figure out bufferpool management data structures
-        # How to write/read to a file at a specific location, without loading entire database?? (pool of memory pages)
-            # keep track of dirty pages
-            # Write all pages to file, we can know which index of bytes it is by an indexing structure??
-        # When full, write back pages to disk (if no query queued for that record) to make room for new pages we want to read from
-    # fixed number of pages in bufferpool = 16 or 32
-# Add indexing for data columns, not just key dictionary
-
-#bufferpool class
-#starts w/ nothing
-#array of tail and base pages
-    #counter in both, to keep the num of pages
-    #store a whole table in bufferpool
-
-    # Functions:
-    # add/fetch page (pin page)
-    # evict pages (unpin page) (if dirty)
-    # re-store updated pages
-    # update/write to page
-
-# Merging
-    # Merge every X number of updates
-
+import os
 class Database():
 
     def __init__(self):
         self.tables = []
-        self.myTable = 'No Table'
-        self.myMetaData = meta_data()
-        # BufferPool get the table, get new parameter for myTable??????????
-        # Get myTable from our Query Object
-        self.myBufferPool = BufferPool(myMetaData,myTable)
-        self.RID_count = 0
+        self.path = 'ECS165'
         pass
 
-    def open(self, path):
-        ### init bufferpool object ###
-        # try to open file, if doesnt exist create it
-        try:
-            # ./ECS165
-            with open(path, 'r') as db_file:
-                self.tables = pickle.load(path)
-        except IOError:
-            with open(path, 'w+') as db_file:
-                pickle.dump(self.tables, db_file)
+    def open(self, path):  #set our database path to path
+        self.path = path
+        pass
 
-
-    def close(self):
-        # Write all changes to disk from bufferpool object
-        #Also merge?
+    def close(self):  #put everything in bufferpool back to disk
+        self.tables[0].bufferpool.close()
         pass
 
     """
@@ -63,8 +23,9 @@ class Database():
     """
     def create_table(self, name, num_columns, key):
         table = Table(name, num_columns, key)
-        os.mkdir("tableblah")
-        self.tables.append(name)
+        self.tables.append(table)
+        "NEW - makes a table directory with name in ECS 165"
+        os.mkdir(os.path.join(self.path+'/', name))
         return table
 
     """
@@ -80,11 +41,4 @@ class Database():
     # Returns table with the passed name
     """
     def get_table(self, name):
-        self.myTable = name
-        self.myBufferPool = BufferPool(self.myMetaData,myTable)
-        # path = "./ECS165/" + name
-        # Have bufferpool open up the correct table directory
-        # Return the table with the passed name
-        # with open(path, 'r') as db_file:
-        #         self.tables = pickle.load(path)
-        return myBufferPool
+        pass
