@@ -11,15 +11,11 @@ import numpy as np
 class ConceptualPage:
 
     def __init__(self, columns):
-        self.pages = []
+        self.pages       = []
         self.num_records = 0
-        self.path = ''
+        self.path        = ''
+        self.isPinned    = False
         # self.key_dict = {}
-
-        # self.pages.append({}) # Indirection Column
-        # # self.pages.append([]) # Schema Encoding
-        # for i in range(1, len(columns) + 4):
-        #     self.add_column()
         self.add_columns(columns)
 
     def update_num_records(self,page):
