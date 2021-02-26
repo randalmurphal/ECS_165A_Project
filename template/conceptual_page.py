@@ -15,7 +15,7 @@ class ConceptualPage:
         self.num_records = 0
         self.path        = ''
         self.isPinned    = False
-        # self.key_dict = {}
+        # self.key_dict    = {}
         self.add_columns(columns)
 
     def update_num_records(self,page):

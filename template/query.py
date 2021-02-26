@@ -312,25 +312,25 @@ class Query:
         #pass
 
 
-    def get_tail_page(self, base_page, columns): #
-
+    def get_tail_page(self, base_page, columns, key): 
         indirection_column = base_page.pages[0]
-        RID_of_base        = base_page.pages[1]
+        RID_of_base        = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
         time_stamp_column  = base_page.pages[2]
         base_schema_column = base_page.pages[3]
         tps_column         = base_page.pages[4]
         base_RID_column    = base_page.pages[5]
         key_column         = base_page.pages[6]
-
-
-
-
+        # tail_path = ./ECS165/Table_Name/PR#/BP#
+        # key:(location_tuple)
+        # table_name, PR#,BP#, Record_num
+        # key_dir[key] = (table_name,1,1,50)
+        # 1.Create a new conceptual_page => path, record_num
         # No tail page or full
         if indirection_column is None or tail_page.isFull():  #if no tail page or full, create one
             # Create a new tail_page and add to path
             # Get the value of PR, and TP from base_page
             # TPS
-            # tail_path = ./ECS165/Table_Name/Page_range#/BP#
+            # tail_path = ./ECS165/Table_Name/PR#/BP#
             pr_num = base_page.path.split('/')[3]
             tail_path_file = './ECS165/' + self.table.name + pr_num + '/TP' + (self.buffer_pool.meta_data.tailRID_count/512)
             # Create file -- tail in bufferpool
@@ -352,7 +352,7 @@ class Query:
                 return my_tail_page
 
 
-    def update_tail_page(self, base_page, tail_page, columns):
+    def update_tail_page(self, base_page, tail_page, columns,key):
         # get a tail_page and update it with columns
         # Fix Schema Encoding
         # Implement snapshot?
@@ -360,14 +360,29 @@ class Query:
         #STEPS
         #if its this records first update, take a snapshot of the record and put that snapshot into tailpage
             #check schema encoding of basepage, if its all 0s then take a createSnapShot
-        base_schema_column = base_page.pages[3]
+        record_index = self.buffer_pool.meta_data.key_dict[key][3]
+        base_schema_column = base_page.pages[3][record_index]
         snapshot = True
-        for val in base_schema_column :  #for each val in schema encoding, check if its 1 ( if 1 its been updated)
+        for val in base_schema_column:  #for each val in schema encoding, check if its 1 ( if 1 its been updated)
             if val == 1:
                 snapshot = False
         if snapshot:
-            #for each value thats not None in columns, set the tail page at the column to whatevers in bp at the column
-
+            #for each value thats not None in columns, set the tail page at the column to snapshot of BP
+            for i,val in enumerate(self.colsToUpdate(key,columns)):
+                if val == 1:
+                    tail_page.pages[i+6][record_index] = base_page.pages[i+6][record_index]
+                #else set to none?
+            base_page.pages[3][record_index] = self.colsToUpdate(key,columns)  #update schema encoding
+            #now create another tail record
+            my_tail_page = self.get_tail_page(my_base_page,columns,key)
+            for i,val in enumerate(self.colsToUpdate(key,columns)):
+                if val == 1:
+                    tail_page.pages[i+6][record_index] = columns[i]
+        else:
+            for i,val in enumerate(self.colsToUpdate(key,columns)):
+                if val == 1:
+                    tail_page.pages[i+6][record_index] = columns[i]
+            base_page.pages[3][record_index] = self.colsToUpdate(key,columns)
         return True
 
     # """
@@ -379,8 +394,8 @@ class Query:
         # """---New---"""
         columns_to_update = self.colsToUpdate(key,columns)
         my_base_page = self.getBasePage(key)
-        my_tail_page = self.get_tail_page(my_base_page)
-        return self.update_tail_page(my_base_page,my_tail_page,columns)
+        my_tail_page = self.get_tail_page(my_base_page,columns,key)
+        return self.update_tail_page(my_base_page,my_tail_page,columns, key)
         # In update_tail_page you MUST INCREMENT THE TAIL_RID_COUNT IN THE BUFFERPOOL -- done in get tail page
 
 
@@ -580,6 +595,9 @@ class Query:
     # Returns False if no record exists in the given range
     '''
     def sum(self, start_range, end_range, aggregate_column_index):
+        #1. Get RIDs from base_pages
+        #2. Get sum from a certain column
+
         ind = Index(self.table)
         values = ind.locate_range(start_range, end_range, aggregate_column_index)
         return sum(values)
