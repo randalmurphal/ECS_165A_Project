@@ -66,11 +66,12 @@ class BufferPool():
                 self.capacity += 1
                 return i
 
-    def createConceptualPage(self, path, columns):
+    def createConceptualPage(self, path, *columns):
         #1. Collect physical pages from array the conceptual page
+        if len(columns) == 1:
+            columns = columns[0]
         cpage      = ConceptualPage(columns)
         cpage.path = path
-
         cols = []
 
         for col in columns:
@@ -98,7 +99,7 @@ class BufferPool():
         conceptualPage.num_records += 1
 
         offset = 6
-        for i in range(0, len(columns)):
+        for i, col in enumerate(columns):
             conceptualPage.pages[i + offset].write(columns[i])
         conceptualPage.pages[3].append(np.zeros(len(columns)))
         return True
@@ -132,7 +133,7 @@ class BufferPool():
         return -1
 
     def close(self): # evict everything from bufferpool
-        for i,value in enumerate(self.array):
+        for i,value in enumerate(self.conceptual_pages):
             if value:
                 with open(value.path, 'wb') as db_file:
                     pickle.dump(value,db_file)
@@ -170,9 +171,6 @@ class BufferPool():
     #         # 1. Add to a new path???
     #         # New directory?
     #         pass
-    def get_tail_pages(self):
-        # Go to
-        pass
     def update_base_page(self):
         # 1. Grab copy of base_page
         # 2. Get most recent tail_page corresponding to the base
@@ -216,26 +214,26 @@ class BufferPool():
         #             else:
         #                 merge_tail_pages.append(tail_page)
         #     return merge_base_pages, merge_tail_pages
-
-    def get_tail_pages(self, base_pages):
-        tail_paths = []
-        for base_page in base_pages:
-            # Look at indirection, figure out which tail page
-            indirection = base_page.pages[0]
-            for i, record in enumerate(base_page.pages[6]):
-                key = record.retrieve(i)
-                if key in indirection.keys():
-                    tail_paths.append(indirection[key][1])
-        # Remove duplicate values in tail_paths
-        tail_paths = list(set(tail_paths))
-        # Get tail pages off of paths
-        tail_pages = {}
-        for path in tail_paths:
-            with open(path, "rb") as db_file:
-                tail_page = pickle.load(db_file)
-                tail_pages[path] = tail_page
-
-        return tail_pages
+    #
+    # def get_tail_pages(self, base_pages):
+    #     tail_paths = []
+    #     for base_page in base_pages:
+    #         # Look at indirection, figure out which tail page
+    #         indirection = base_page.pages[0]
+    #         for i, record in enumerate(base_page.pages[6]):
+    #             key = record.retrieve(i)
+    #             if key in indirection.keys():
+    #                 tail_paths.append(indirection[key][1])
+    #     # Remove duplicate values in tail_paths
+    #     tail_paths = list(set(tail_paths))
+    #     # Get tail pages off of paths
+    #     tail_pages = {}
+    #     for path in tail_paths:
+    #         with open(path, "rb") as db_file:
+    #             tail_page = pickle.load(db_file)
+    #             tail_pages[path] = tail_page
+    #
+    #     return tail_pages
 
     def get_base_pages(self):
         base_pages = []
