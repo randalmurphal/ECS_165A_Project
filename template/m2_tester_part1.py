@@ -1,10 +1,9 @@
-from db import Database
-from query import Query
-#from config import init
-import pickle
+from template.db import Database
+from template.query import Query
+from template.config import init
 
 from random import choice, randint, sample, seed
-#init()
+init()
 
 db = Database()
 db.open('./ECS165')
@@ -33,7 +32,7 @@ for key in keys:
     # else:
     #     print('select on', key, ':', record)
 print("Select finished")
-'''
+
 for _ in range(10):
     for key in keys:
         updated_columns = [None, None, None, None, None]
@@ -64,19 +63,4 @@ for i in range(0, 100):
     # else:
     #     print('sum on [', keys[r[0]], ',', keys[r[1]], ']: ', column_sum)
 print("Aggregate finished")
-'''
-print(query.table.bufferpool.array)
-for j in range(len(query.table.bufferpool.array)):
-    if(query.table.bufferpool.array[j]):
-        print(query.table.bufferpool.array[j].path)
-        for i in range(100):
-            print(query.table.bufferpool.array[j].retrieve(i), end = ' ')
-        print("\n")
-print("NOW THIS IS WHATS IN DISK:")
-path = 'ECS165/Grades/PR1/BP1/Column0'
 db.close()
-with open(path, 'rb') as db_file:
-    temp_page = pickle.load(db_file)
-for i in range(100):
-    print(temp_page.retrieve(i), end = ' ')
-print("\n")
