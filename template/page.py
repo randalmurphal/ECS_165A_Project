@@ -20,11 +20,11 @@ class Page:
 	def write(self, value):
 		offset = self.num_records * 8
 		for i in int_to_bytes(value, 8):
-			# try:
-			self.data[offset] = i
-			offset = offset + 1
-			# except IndexError:
-			# 	print("IndexError:", offset, self.num_records)
+			try:
+				self.data[offset] = i
+				offset = offset + 1
+			except IndexError:
+				raise("IndexError:", offset, self.num_records)
 		self.num_records += 1
 		return True
 

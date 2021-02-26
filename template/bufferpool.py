@@ -4,6 +4,10 @@ from conceptual_page import ConceptualPage
 import pickle
 import os
 import threading
+import math
+import numpy as np
+
+MAX_INT = int(math.pow(2, 63) - 1)
 
 #we probably want meta data to be stored in the files
 class MetaData():
@@ -44,11 +48,12 @@ class BufferPool():
         # self.array = [None] * self.max_capacity #array of pages
         # self.array=[]
         self.conceptual_pages = []
-        self.buffer_keys = {}
+        self.buffer_keys = {} # path: page
         self.next_evict  = 0
         self.table_name  = table_name
         self.merge_bases = []
         self.merge_tails = []
+        self.first = True
 
     def load(self, path):      #loads page associated with path, returns index of bufferpool the loaded page is in
         if self.capacity == self.max_capacity:
@@ -61,13 +66,22 @@ class BufferPool():
                 self.capacity += 1
                 return i
 
-    def createConceptualPage(self, path, columns=None):
+    def createConceptualPage(self, path, columns):
         #1. Collect physical pages from array the conceptual page
-        my_conceptual_page = ConceptualPage(columns)
-        my_conceptual_page.path = path
-        if columns != None:
-            self.populateConceptualPage(columns, my_conceptual_page) ### TODO:
-        self.addConceptualPage(my_conceptual_page)
+        cpage      = ConceptualPage(columns)
+        cpage.path = path
+
+        cols = []
+
+        for col in columns:
+            if col == None:
+                cols.append(MAX_INT)
+            else:
+                cols.append(col)
+
+        self.populateConceptualPage(cols, cpage)
+        self.addConceptualPage(cpage)
+        return cpage
 
     def addConceptualPage(self, conceptualPage):
         ### Check if bufferpool is full & evict if necessary ###
@@ -81,25 +95,28 @@ class BufferPool():
     def populateConceptualPage(self, columns, conceptualPage):
         #
         ### TODO: Make work with values instead of record ###
+        conceptualPage.num_records += 1
+
         offset = 6
         for i in range(0, len(columns)):
             conceptualPage.pages[i + offset].write(columns[i])
+        conceptualPage.pages[3].append(np.zeros(len(columns)))
         return True
-        # conceptualPage.pages[1].write(record.rid)
-        # conceptualPage.pages[2].write(record.time)
-        # conceptualPage.pages[3].append(np.zeros(len(base_page.pages) - 6))
-        # conceptualPage.pages[4].write(record.TPS)
-        # conceptualPage.pages[5].write(record.baseRID)
-        # for i, col in enumerate(record.columns):
-        #     conceptualPage.pages[i+6].write(col)
-        #
-        # self.num_records += 1
-        pass
+
     ### Assuming pages stack will be LRU at top of stack (index 0)
     def evict(self):   #evict a physical page from bufferpool (LRU)
         ### check if value being evicted is pinned
         # Write to disk whatever is at the top of stack
-        temp_cpage = self.conceptual_pages.pop(0)
+
+        i = 0
+        temp_cpage = self.conceptual_pages[i]
+        while temp_cpage.isPinned:
+            i += 1
+            if i == len(self.conceptual_pages):
+                i = 0
+            temp_cpage = self.conceptual_pages[i]
+        temp_cpage = self.conceptual_pages.pop(i)
+
         self.remove_keys(temp_cpage)
         with open(temp_cpage.path, 'wb') as db_file:
             pickle.dump(temp_cpage, db_file)
@@ -114,7 +131,7 @@ class BufferPool():
                     return i
         return -1
 
-    def close(self):# evict everything from bufferpool
+    def close(self): # evict everything from bufferpool
         for i,value in enumerate(self.array):
             if value:
                 with open(value.path, 'wb') as db_file:
@@ -122,31 +139,37 @@ class BufferPool():
 
 
     def remove_keys(self, conceptual_page):
-        for i in range(conceptual_page.num_records):
-            key_i = conceptual_page.pages[6].retrieve(i)
-            del self.buffer_keys[key_i]
+        try:
+            del self.buffer_keys[conceptual_page.path]
+        except:
+            print(self.buffer_keys, conceptual_page.path)
+        # for i in range(conceptual_page.num_records):
+        #     key_i = conceptual_page.pages[6].retrieve(i)
+        #     del self.buffer_keys[conceptual_page.path]
 
     def add_keys(self, conceptual_page):
-        for i in range(conceptual_page.num_records):
-            key_i = conceptual_page.pages[6].retrieve(i)
-            self.buffer_keys[key_i] = conceptual_page
+        self.buffer_keys[conceptual_page.path] = conceptual_page
+        # for i in range(conceptual_page.num_records):
+        #     key_i = conceptual_page.pages[6].retrieve(i)
+        #     self.buffer_keys[conceptual_page.path] = conceptual_page
 
     # Returns base & tail pages for merging
     def id_merge_pages(self):
         pass
 # '''
+#TODO actually add pages to merge_bases
     def add_base_page(self, base_page):
         self.merge_bases.append(base_page.path)
         pass
     def create_copy_of_base(self):
         pass
 
-    def create_copy_of_base_pages(self, num_merges=20, base_pages):
-        for i in range(num_merges):
-            # loop through self.merge_bases
-            # 1. Add to a new path???
-            # New directory?
-            pass
+    # def create_copy_of_base_pages(self, base_pages, num_merges=20):
+    #     for i in range(num_merges):
+    #         # loop through self.merge_bases
+    #         # 1. Add to a new path???
+    #         # New directory?
+    #         pass
     def get_tail_pages(self):
         # Go to
         pass
@@ -166,6 +189,7 @@ class BufferPool():
         #since tail and base pages are in the same folder
         # we have to loop through every conceptual page and check if it's a base page
         #then loop through schema encoding and see if it needs to be merged
+
         self.add_base_page(base_page)
 
         #if conceptual_page.pages[0]
@@ -203,23 +227,15 @@ class BufferPool():
                 if key in indirection.keys():
                     tail_paths.append(indirection[key][1])
         # Remove duplicate values in tail_paths
-        unique_t_paths = []
-        [unique_t_paths.append(path) for path in tail_paths if path not in res]
+        tail_paths = list(set(tail_paths))
         # Get tail pages off of paths
         tail_pages = {}
-        for path in unique_t_paths:
+        for path in tail_paths:
             with open(path, "rb") as db_file:
                 tail_page = pickle.load(db_file)
                 tail_pages[path] = tail_page
 
         return tail_pages
-
-
-    def merge_pages(self, base_pages, tail_pages):
-        # add base record RIDs to local merge dict
-
-
-
 
     def get_base_pages(self):
         base_pages = []
@@ -316,12 +332,6 @@ class BufferPool():
         # 1. Get the base_pages you want to merge (Based off of something)
         # 2. Make a copy of those base_pages
 
-
-
-
-        #key:rid value:path to tail page
-        #indirec colum gives tail rid -> figure out which tail page
-        #key -> tuple->path  to tail page
 
 
 

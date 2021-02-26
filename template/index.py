@@ -77,6 +77,8 @@ class Index:
     """
 
     def create_index(self, column_number):
+        # Iterate through all base_pages and tail_pages collect all the values in the column_number
+        # Create a dictionary [Value:[Paths]]
         pass
 
     """
