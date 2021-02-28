@@ -1,9 +1,6 @@
-from db import Database
-from query import Query
-from config import init
-# from template.db import Database
-# from template.query import Query
-# from template.config import init
+from template.db import Database
+from template.query import Query
+from template.config import init
 
 from random import choice, randint, sample, seed
 init()

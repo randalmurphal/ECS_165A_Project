@@ -1,21 +1,18 @@
-from table import Table
-from bufferpool import BufferPool
+from template.table import Table
+from template.bufferpool import BufferPool
 import os, pickle
 class Database():
 
     def __init__(self):
         self.tables = []
-        self.path = 'ECS165'
-        pass
 
     def open(self, path):  #set our database path to path
-        self.path = path
-        pass
+        self.path = "./template/"+path[2:]
 
     def close(self):  #put everything in bufferpool back to disk
         while self.tables:
             table = self.tables.pop(0)
-            t_path = './ECS165/%s/table'%table.name
+            t_path = './template/ECS165/%s/table'%table.name
             table.buffer_pool.close() # evict all
             # Store table in file (with bufferpool in it)
             with open(t_path, 'wb') as t_file:
@@ -48,11 +45,11 @@ class Database():
     # Returns table with the passed name
     """
     def get_table(self, name):
-        rootdir = './ECS165/'
+        rootdir = './template/ECS165/'
         for subdir, dirs, files in os.walk(rootdir):
             for table_name in dirs:
                 if table_name == name:
-                    t_path = './ECS165/%s/table'%table_name
+                    t_path = './template/ECS165/%s/table'%table_name
                     with open(t_path, 'rb') as t_file:
                         table = pickle.load(t_file)
                     return table

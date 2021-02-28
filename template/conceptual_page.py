@@ -1,5 +1,5 @@
 # from config import *
-from page import Page
+from template.page import Page
 import numpy as np
 # 4096 total records
 '''

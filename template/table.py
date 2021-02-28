@@ -1,7 +1,7 @@
-from page import *
-from index import Index
+from template.page import *
+from template.index import Index
 from time import time
-from bufferpool import BufferPool
+from template.bufferpool import BufferPool
 # from page_range import PageRange
 
 # These are indexes
@@ -42,6 +42,6 @@ class Table:
         self.tail_RID  = 0
         self.init_key  = 0
         self.buffer_pool = None
-        
+
     def __merge(self):
         pass

@@ -1,6 +1,6 @@
-from config import *
-from page import Page
-from conceptual_page import ConceptualPage
+from template.config import *
+from template.page import Page
+from template.conceptual_page import ConceptualPage
 import pickle
 import os
 import threading
@@ -235,12 +235,18 @@ class BufferPool():
         new_base_page = copy.copy(base_page)
         for i, key in enumerate(base_RID_column):
             for j, tail_page in tail_page_objs:
-                if key in tail_page[j].pages[0]:
-                    for k in range(len(base_page.pages[3][0])):
-                        new_value = tail_page.pages[k+6].retrieve(tail_record_num)
-                        tail_page[j].pages[k+6].overWrite(ne,new_value)
-                    # Here we want the values
-                    break
+                count = 0
+                for x in tail_page.pages[0]:
+                    if x == key:
+                        for k in range(len(base_page.pages[3][0])):
+                            new_value = tail_page.pages[k+6].retrieve(count)
+                            tail_page.pages[k+6].overWrite(new_base_page.pages[k+6].retrieve(i),new_value)
+                        # Here we want the values
+                    else:
+                        count += 1
+        return new_base_page
+    def change_dict_vals(self,dictionary):
+        pass
 
     def merge(self):
         possible_merges = []
@@ -251,47 +257,47 @@ class BufferPool():
             tail_pages = self.get_tail_pages(base_pages)
             create_base_copy(base_page)
         # copy_of_base = self.create_copies()
-        for base_page in base_pages:
-            for base_record_num in range(512):                                    #should this be 511? starts from 0
-                base_record_RID = base_page.pages[1].retrieve(base_record_num)
-                merge_key_dict[base_record_RID] = (base_page, base_record_num)
-
-        # to check if the base record has already had an update merged with it
-        base_records_already_updated = []
-
-        # iterate through all tail pages we pulled in
-        for tail_page in tail_pages:
-            # iterate through all tail records in a given tail page
-            for tail_record_num in range(511, -1, -1):
-                # Determine the original base record for this tail record
-                tail_record_BaseRID = tail_page.pages[5].retrieve(tail_record_num)
-                # Check if we have already merged an update to this base record.
-                # If we have merged an update: skip this tail record.
-                if tail_record_BaseRID in base_records_already_updated:
-                    continue
-                # grab the record TID and check if it is less than the TPS number
-                # of the base record: if so, skip this tail record.
-                tail_record_TID = tail_page.pages[1].retrieve(tail_record_num)
-                base_page_containing_base_record, base_record_num = merge_RID_dict[tail_record_BaseRID][0], merge_RID_dict[tail_record_BaseRID][1]
-                base_record_TPS = base_page_containing_base_record.pages[4].retrieve(base_record_num)
-                if base_record_TPS >= tail_record_TID:
-                    continue
-                # We can now proceed with updating the values in the base record
-                # with the appropriate values from the tail record
-                num_columns = len(tail_page.pages[6:])
-                offset = 6
-
-                for column_num in range(offset, num_columns + offset):
-                    new_value = tail_page.pages[column_num].retrieve(tail_record_num)
-                    # skips to the next column if null
-                    if new_value == MAX_INT:
-                        continue
-                    else:
-                        # writes the new value into the base record
-                        base_page_containing_base_record.pages[column_num].overWrite(base_record_num, new_value)
-
-        self.merge_bases.clear()  #Clear the merge lists
-        self.merge_tails.clear()
+        # for base_page in base_pages:
+        #     for base_record_num in range(512):                                    #should this be 511? starts from 0
+        #         base_record_RID = base_page.pages[1].retrieve(base_record_num)
+        #         merge_key_dict[base_record_RID] = (base_page, base_record_num)
+        #
+        # # to check if the base record has already had an update merged with it
+        # base_records_already_updated = []
+        #
+        # # iterate through all tail pages we pulled in
+        # for tail_page in tail_pages:
+        #     # iterate through all tail records in a given tail page
+        #     for tail_record_num in range(511, -1, -1):
+        #         # Determine the original base record for this tail record
+        #         tail_record_BaseRID = tail_page.pages[5].retrieve(tail_record_num)
+        #         # Check if we have already merged an update to this base record.
+        #         # If we have merged an update: skip this tail record.
+        #         if tail_record_BaseRID in base_records_already_updated:
+        #             continue
+        #         # grab the record TID and check if it is less than the TPS number
+        #         # of the base record: if so, skip this tail record.
+        #         tail_record_TID = tail_page.pages[1].retrieve(tail_record_num)
+        #         base_page_containing_base_record, base_record_num = merge_RID_dict[tail_record_BaseRID][0], merge_RID_dict[tail_record_BaseRID][1]
+        #         base_record_TPS = base_page_containing_base_record.pages[4].retrieve(base_record_num)
+        #         if base_record_TPS >= tail_record_TID:
+        #             continue
+        #         # We can now proceed with updating the values in the base record
+        #         # with the appropriate values from the tail record
+        #         num_columns = len(tail_page.pages[6:])
+        #         offset = 6
+        #
+        #         for column_num in range(offset, num_columns + offset):
+        #             new_value = tail_page.pages[column_num].retrieve(tail_record_num)
+        #             # skips to the next column if null
+        #             if new_value == MAX_INT:
+        #                 continue
+        #             else:
+        #                 # writes the new value into the base record
+        #                 base_page_containing_base_record.pages[column_num].overWrite(base_record_num, new_value)
+        #
+        # self.merge_bases.clear()  #Clear the merge lists
+        # self.merge_tails.clear()
         return True
 
 

@@ -1,9 +1,9 @@
-from table import Table, Record
-from index import Index
-from conceptual_page import ConceptualPage
-from page_range import PageRange
-from page import Page
-from bufferpool import BufferPool
+from template.table import Table, Record
+from template.index import Index
+from template.conceptual_page import ConceptualPage
+from template.page_range import PageRange
+from template.page import Page
+from template.bufferpool import BufferPool
 
 from random import randint
 import numpy as np
@@ -38,34 +38,48 @@ class Query:
     column AND STILL point towards a tail record through its indirection column.
     """
     def delete(self, key):
-        # Grab location of base record
-        # ind = Index(self.table)
-        # baseR_loc = ind.locate(key, 0, key)[0]
-        baseR_loc = self.table.key_dict[key]
-        baseR_p_range, baseR_base_pg, baseR_pg, baseR_rec = baseR_loc
-        base_pages    = self.table.page_directory[baseR_p_range].range[0][baseR_base_pg].pages
-        base_rid      = base_pages[1][baseR_pg].retrieve(baseR_rec)
-        base_schema_i = 512*baseR_pg + baseR_rec
-        base_schema   = base_pages[3][base_schema_i]
-        p_range       = self.table.page_directory[baseR_p_range]
-        # Check indirection column to see if has been updated
-        indirection = base_pages[0]
-        updated     = base_rid in indirection.keys()
-        n_cols      = self.table.num_columns
-        none_arr    = [None]*n_cols
-        # If not updated, add tail page with MAX_INT vals and add to indirection
-        if not updated:
-            # Update to add tail page with None for all values
-            self.update(key, *[None]*n_cols)
-        else:
-            # Change base schema to all 0's, then update which gives None tail page
-            base_schema = np.zeros(n_cols)
-            self.update(key, *[None]*n_cols)
+        base_page = self.get_from_disk(key=key)
+        _, _, _, base_rec_ind = self.buffer_pool.key_dict[key]
 
-        return True
+        # Set schema to be 0's
+        for i in range(len(base_page.pages[3][base_rec_ind])):
+            base_page.pages[3][base_rec_ind][i] = 0
+        # Set indirection to something if didnt have something before
+        if not key in base_page.pages[0].keys():
+            # empty_tail = ConceptualPage([MAX_INT]*table.num_columns)
+            # self.add_meta(empty_tail)
+            
+            base_RID = base_page.pages[1].retrieve(base_rec_ind)
+            base_page.pages[0][base_RID] = tail_path, tail_rec_ind
+
+        # # Grab location of base record
+        # # ind = Index(self.table)
+        # # baseR_loc = ind.locate(key, 0, key)[0]
+        # baseR_loc = self.table.key_dict[key]
+        # baseR_p_range, baseR_base_pg, baseR_pg, baseR_rec = baseR_loc
+        # base_pages    = self.table.page_directory[baseR_p_range].range[0][baseR_base_pg].pages
+        # base_rid      = base_pages[1][baseR_pg].retrieve(baseR_rec)
+        # base_schema_i = 512*baseR_pg + baseR_rec
+        # base_schema   = base_pages[3][base_schema_i]
+        # p_range       = self.table.page_directory[baseR_p_range]
+        # # Check indirection column to see if has been updated
+        # indirection = base_pages[0]
+        # updated     = base_rid in indirection.keys()
+        # n_cols      = self.table.num_columns
+        # none_arr    = [None]*n_cols
+        # # If not updated, add tail page with MAX_INT vals and add to indirection
+        # if not updated:
+        #     # Update to add tail page with None for all values
+        #     self.update(key, *[None]*n_cols)
+        # else:
+        #     # Change base schema to all 0's, then update which gives None tail page
+        #     base_schema = np.zeros(n_cols)
+        #     self.update(key, *[None]*n_cols)
+        #
+        # return True
 
     def create_pr_dir(self):
-        os.mkdir(os.path.join('ECS165/'+self.table.name, "PR"+str(self.buffer_pool.meta_data.currpr)))  #insert new PR and BP into disk
+        os.mkdir(os.path.join('./template/ECS165/'+self.table.name, "PR"+str(self.buffer_pool.meta_data.currpr)))  #insert new PR and BP into disk
 
     # Checks to see if path is in bufferpool already
     def in_buffer(self, path):
@@ -114,7 +128,7 @@ class Query:
             self.buffer_pool.meta_data.currpr += 1
             self.buffer_pool.meta_data.currbp = 0
             self.create_pr_dir()
-            path = './ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
+            path = './template/ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
             # with new values written in
             cpage = self.buffer_pool.createConceptualPage(path, False, *columns)
             cpage.isPinned = True
@@ -122,11 +136,11 @@ class Query:
             # if need new conceptual page, create in currpr directory
             if new_base_page:
                 self.buffer_pool.meta_data.currbp += 1
-                path = './ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
+                path = './template/ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
                 cpage = self.buffer_pool.createConceptualPage(path, False, *columns)
                 cpage.isPinned = True
             else:
-                path = './ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
+                path = './template/ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
                 cpage, is_in_buffer = self.in_buffer(path)
                 if not is_in_buffer:
                     cpage = self.get_from_disk(key=key, path=path)
@@ -177,8 +191,6 @@ class Query:
                 tail_path, tail_rec_ind = indirection[rec_RID]
                 tail_page = self.get_tail_page(cpage, key, True, *columns)
                 tail_page.isPinned = True
-                # tail: max, 18, 4, 0, 18
-                # base: key, 2, 12, 2, 1
                 for i, val in enumerate(b_schema):
                     if query_columns[i] == 1:
                         if val == 0:
@@ -243,7 +255,7 @@ class Query:
             # Is it in the bufferpool'
             # location = (PR,BP,PP,Record)
             location = self.buffer_pool.meta_data.key_dict[key]
-            path     = './ECS165/'+self.table.name+'/PR'+str(location[0])+'/BP'+str(location[1])
+            path     = './template/ECS165/'+self.table.name+'/PR'+str(location[0])+'/BP'+str(location[1])
             # Check which base_page has the path
         cpage, is_in_buffer = self.in_buffer(path)
         if not is_in_buffer:
@@ -286,13 +298,13 @@ class Query:
         key_column         = base_page.pages[6]
         base_rec_RID       = base_page.pages[1].retrieve(base_rec_ind)
         # No tail page or full
-        pr_num = base_page.path.split('/')[3]
-        # ./ECS165/Grades/PRO/TP0
+        pr_num = base_page.path.split('/')[4]
+        # ./template/ECS165/Grades/PRO/TP0
         if base_rec_RID in indirection.keys():
             tail_path, tail_rec_ind = indirection[base_rec_RID]
         else:
-            tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
-        # './ECS165/Grades/PR0/TP0'
+            tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+        # './template/ECS165/Grades/PR0/TP0'
         tail_page, is_in_buffer = self.in_buffer(tail_path)
         if not is_in_buffer:
             if not self.buffer_pool.first:
@@ -300,7 +312,7 @@ class Query:
                     with open(tail_path, "rb") as db_file:
                         tail_file = pickle.load(db_file)
                         if tail_file.full() and prev == False:
-                            tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
+                            tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
                             tail_page, is_in_buffer = self.in_buffer(tail_path)
                             if not is_in_buffer:
                                 tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
@@ -318,7 +330,7 @@ class Query:
                 self.add_meta(tail_page)
         else:
             if tail_page.full() and prev == False:
-                tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
+                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
                 tail_page, is_in_buffer = self.in_buffer(tail_path)
                 if not is_in_buffer:
                     tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
@@ -374,7 +386,7 @@ class Query:
             # if a snapshop needs to be created and there is only 1 available space in the current tail page: create new tail page
             if tail_page.full():
                 tail_page.isPinned = False
-                tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
                 tail_page = self.createConceptualPage(tail_path, True, *columns)
                 tail_page.isPinned = True
             # Create tailpage HERE
@@ -398,7 +410,7 @@ class Query:
             if tail_page.full():
                 tail_page.isPinned = False
                 pr_num    = base_page.path.split("/")[3][2:]
-                tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
                 tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                 tail_page.isPinned = True
             for i, val in enumerate(new_schema):
@@ -464,9 +476,9 @@ class Query:
         # self.buffer_pool.
         # Iterate through all files with BP and collect all paths
         #2. Get sum from a certain column
-        # path = "./ECS165/%s/PR%s/BP%s" % (self.table.name, pr_num, bp_num)
-        regex = re.compile("./ECS165/%s/PR[0-9]+/BP[0-9]+"%self.table.name)
-        rootdir = './ECS165/'
+        # path = "./template/ECS165/%s/PR%s/BP%s" % (self.table.name, pr_num, bp_num)
+        regex = re.compile("./template/ECS165/%s/PR[0-9]+/BP[0-9]+"%self.table.name)
+        rootdir = './template/ECS165/'
         file_paths = []
         for subdir, dirs, files in os.walk(rootdir):
             for file in files:
