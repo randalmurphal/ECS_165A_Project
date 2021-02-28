@@ -13,187 +13,107 @@ MAX_INT = int(math.pow(2, 63) - 1)
 class MetaData():
     # data = some tuple of info we can extract below
     def __init__(self):
-        # curr_table & curr_page_range is the currently opened file
-        self.currpr = -1
-        self.currbp = 0
-
-        self.curr_page_range    = 0
-        self.curr_base_range    = 0
-        self.curr_physical_page = 0
-        self.curr_tail_page     = 0
-        self.record_num         = 0
-        # last_table & last_page_range keep track of the most recently created table and page_range
-        self.last_page_range    = 0
-        self.last_base_page     = 0
-        self.last_physical_page = 0 # THIS WILL BE THE PATH TO THE
-        self.last_record = 0
-        # currently opened curr_baseRID and curr_tailRID
-        self.baseRID_count = 0
-        self.tailRID_count = 0
-        # Key:(table,page_range)
-        # Might want to make this a file
-        self.key_dict = {} #Which file to look at structed key:location
-        self.indexes  = {} #This is for create_index in index.py
-        self.newPageNecessary = False
-        # For Inserting Records
-        # self.insertion_conceptual_page =
-        # self.insertion_conceptual_page_path =
+        self.currpr        = -1 # current page range (-1 bc creation of PR on first insert)
+        self.currbp        = 0  # current base page
+        self.record_num    = 0  # number of total records
+        self.baseRID_count = 0  # number of base records
+        self.tailRID_count = 0  # number of tail records
+        self.key_dict      = {} # key:(pr#, bp#, page#, rec_ind)
 
 class BufferPool():
 
     def __init__(self, table_name):
-        self.meta_data    = MetaData()
-        self.max_capacity = 16
-        self.capacity     = 0
-        # self.array = [None] * self.max_capacity #array of pages
-        # self.array=[]
-        self.conceptual_pages = []
-        self.buffer_keys = {} # path: page
-        self.next_evict  = 0
-        self.table_name  = table_name
-        self.merge_bases = []
-        self.merge_tails = []
-        self.first = True
+        self.meta_data        = MetaData() # holds table meta data
+        self.max_capacity     = 16         # max number of cpages in buffer
+        self.conceptual_pages = []         # cpage objects
+        self.buffer_keys      = {}         # page_path: page_object
+        self.table_name       = table_name # name of table
+        self.merge_bases      = []         # holds bp paths ready to merge
+        self.merge_tails      = []         # holds tail pages for merge bases
+        self.first            = True       # for manual check to make first PR
 
-    def load(self, path):      #loads page associated with path, returns index of bufferpool the loaded page is in
-        if self.capacity == self.max_capacity:
-            self.evict()
-        with open(path, 'rb') as db_file:
-            temp_page = pickle.load(db_file)
-        for i,value in enumerate(self.array):
-            if value == None:
-                self.array[i] = temp_page
-                self.capacity += 1
-                return i
-
-    def createConceptualPage(self, path, tail, *columns):
-        #1. Collect physical pages from array the conceptual page
-        if len(columns) == 1:
-            columns = columns[0]
+    '''
+        Creates and adds new cpage to buffer_pool
+        params: path of new page, bool for is_tail, and column values
+                for populate
+        returns the new cpage
+    '''
+    def createConceptualPage(self, path, is_tail, *columns):
         cpage      = ConceptualPage(columns)
         cpage.path = path
-        cols = []
-
-        for col in columns:
-            if col == None:
-                cols.append(MAX_INT)
-            else:
-                cols.append(col)
-        if not tail:
-            self.populateConceptualPage(cols, cpage)
+        # dont want to add values to tail
+        if not is_tail:
+            self.populateConceptualPage(columns, cpage)
         self.addConceptualPage(cpage)
         return cpage
 
+    '''
+        Adds a cpage to buffer_pool while following eviction policy
+    '''
     def addConceptualPage(self, conceptualPage):
-        ### Check if bufferpool is full & evict if necessary ###
-        # Check if conceptual_pages length > limit
+        # evict until space in buffer
         if len(self.conceptual_pages) >= self.max_capacity:
             self.evict()
-        self.add_keys(conceptualPage)
+        self.add_key(conceptualPage) # add page path to buffer_keys
         self.conceptual_pages.append(conceptualPage)
 
-    # Adds new record values to a conceptual page
+    '''
+        Adds columns values to the cpage in parameter
+        returns True
+    '''
     def populateConceptualPage(self, columns, conceptualPage):
-        #
-        ### TODO: Make work with values instead of record ###
         conceptualPage.num_records += 1
-
-        offset = 6
+        offset = 6 # number of meta columns
         for i, col in enumerate(columns):
             conceptualPage.pages[i + offset].write(columns[i])
         conceptualPage.pages[3].append(np.zeros(len(columns)))
         return True
 
-    ### Assuming pages stack will be LRU at top of stack (index 0)
+    '''
+        Evict called when buffer_pool needs to remove a cpage from memory
+        - Loops through to find first page not pinnex (waits until finds one)
+        - Writes to disk if page is dirty, else just remove from buffer
+    '''
     def evict(self):   #evict a physical page from bufferpool (LRU)
-        ### check if value being evicted is pinned
-        # Write to disk whatever is at the top of stack
-
         i = 0
-        temp_cpage = self.conceptual_pages[i]
-        while temp_cpage.isPinned:
+        cpage = self.conceptual_pages[i]
+        while cpage.isPinned:
             i += 1
             if i == len(self.conceptual_pages):
                 i = 0
-            temp_cpage = self.conceptual_pages[i]
-        temp_cpage = self.conceptual_pages.pop(i)
-        temp_cpage.isPinned = False
-
-        self.remove_keys(temp_cpage)
-        if temp_cpage.dirty:
-            path = temp_cpage.path
-            temp_cpage.dirty = False
+            cpage = self.conceptual_pages[i]
+        cpage = self.conceptual_pages.pop(i) # remove and store unpinned cpage
+        cpage.isPinned = False
+        self.remove_key(cpage)
+        # if changes to write, page is dirty
+        if cpage.dirty:
+            path = cpage.path
+            cpage.dirty = False
             with open(path, 'wb') as db_file:
-                pickle.dump(temp_cpage, db_file)
-        # TypeError: file must have a 'write' attribute
+                pickle.dump(cpage, db_file)
 
-    #def commit(self):  #commit changes in bufferpool to memory
-
-    def checkBuffer(self,path):  #given a path to disk, check if that page is already in bufferpool
-        for i,value in enumerate(self.array):
-            if value:
-                if value.path == path:
-                    return i
-        return -1
-
-    def close(self): # evict everything from bufferpool
+    '''
+        Close: evicts all cpages from buffer_pool
+    '''
+    def close(self):
         while self.conceptual_pages:
             self.evict()
 
-    def remove_keys(self, conceptual_page):
+    '''
+        Remove_key: Removes a cpage's path from buffer_keys
+    '''
+    def remove_key(self, conceptual_page):
         del self.buffer_keys[conceptual_page.path]
 
-    def add_keys(self, conceptual_page):
+    '''
+        Add_key: Adds a cpage's path to buffer_keys
+    '''
+    def add_key(self, conceptual_page):
         self.buffer_keys[conceptual_page.path] = conceptual_page
 
-    # Returns base & tail pages for merging
-    def id_merge_pages(self):
-        pass
-# '''
-#TODO actually add pages to merge_bases
-    def add_base_page(self, base_page):
-        self.merge_bases.append(base_page.path)
-        pass
-    def create_copy_of_base(self):
-        pass
-
-    # def create_copy_of_base_pages(self, base_pages, num_merges=20):
-    #     for i in range(num_merges):
-    #         # loop through self.merge_bases
-    #         # 1. Add to a new path???
-    #         # New directory?
-    #         pass
-    def update_base_page(self):
-        # 1. Grab copy of base_page
-        # 2. Get most recent tail_page corresponding to the base
-        # BP1, BP2, TP1, TP2, TP3
-        # Go to the BP, then the indirection and get the path for ALL the tailpages
-        pass
-
-
-    # Add full base_pages into the array?
-    # 3. Get tail_pages corresponding to the base_pages you want to merge
-        # 3.1 You can do this by using the BaseRID column(Which tells you which tail_page corresponding to the base_page)
-
-    # def get_tail_pages(self, base_pages):
-    #     tail_paths = []
-    #     for base_page in base_pages:
-    #         # Look at indirection, figure out which tail page
-    #         indirection = base_page.pages[0]
-    #         for i, record in enumerate(base_page.pages[6]):
-    #             key = record.retrieve(i)
-    #             if key in indirection.keys():
-    #                 tail_paths.append(indirection[key][1])
-    #     # Remove duplicate values in tail_paths
-    #     tail_paths = list(set(tail_paths))
-    #     # Get tail pages off of paths
-    #     tail_pages = {}
-    #     for path in tail_paths:
-    #         with open(path, "rb") as db_file:
-    #             tail_page = pickle.load(db_file)
-    #             tail_pages[path] = tail_page
-    #
-    #     return tail_pages
+    # # Returns base & tail pages for merging
+    # def id_merge_pages(self):
+    #     pass
 
     def get_base_pages(self):
         base_pages = []
@@ -341,7 +261,51 @@ class BufferPool():
         # 2. Make a copy of those base_pages
 
 
+# '''
+#TODO actually add pages to merge_bases
+    def add_base_page(self, base_page):
+        self.merge_bases.append(base_page.path)
 
+    def create_copy_of_base(self):
+        pass
+
+    # def create_copy_of_base_pages(self, base_pages, num_merges=20):
+    #     for i in range(num_merges):
+    #         # loop through self.merge_bases
+    #         # 1. Add to a new path???
+    #         # New directory?
+    #         pass
+    def update_base_page(self):
+        # 1. Grab copy of base_page
+        # 2. Get most recent tail_page corresponding to the base
+        # BP1, BP2, TP1, TP2, TP3
+        # Go to the BP, then the indirection and get the path for ALL the tailpages
+        pass
+
+
+    # Add full base_pages into the array?
+    # 3. Get tail_pages corresponding to the base_pages you want to merge
+        # 3.1 You can do this by using the BaseRID column(Which tells you which tail_page corresponding to the base_page)
+
+    # def get_tail_pages(self, base_pages):
+    #     tail_paths = []
+    #     for base_page in base_pages:
+    #         # Look at indirection, figure out which tail page
+    #         indirection = base_page.pages[0]
+    #         for i, record in enumerate(base_page.pages[6]):
+    #             key = record.retrieve(i)
+    #             if key in indirection.keys():
+    #                 tail_paths.append(indirection[key][1])
+    #     # Remove duplicate values in tail_paths
+    #     tail_paths = list(set(tail_paths))
+    #     # Get tail pages off of paths
+    #     tail_pages = {}
+    #     for path in tail_paths:
+    #         with open(path, "rb") as db_file:
+    #             tail_page = pickle.load(db_file)
+    #             tail_pages[path] = tail_page
+    #
+    #     return tail_pages
 
 # Cliff merge code vvvv
 

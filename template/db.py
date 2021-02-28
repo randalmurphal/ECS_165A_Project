@@ -55,9 +55,3 @@ class Database():
                     return table
 
         raise ValueError("Table name '%s' not in directory '%s'"%(name, rootdir))
-
-            # if dirs == name:
-            # for file in files:
-            #     path = os.path.join(subdir, file) # path to file
-            #     if not re.match(regex, path) == None:
-            #         file_paths.append(path)

@@ -50,37 +50,6 @@ class Query:
         self.update(key, *[None]*self.table.num_columns)
         return True
 
-    def create_pr_dir(self):
-        os.mkdir(os.path.join('./template/ECS165/'+self.table.name, "PR"+str(self.buffer_pool.meta_data.currpr)))  #insert new PR and BP into disk
-
-    # Checks to see if path is in bufferpool already
-    def in_buffer(self, path):
-        for cpage in self.buffer_pool.conceptual_pages:
-            if cpage.path == path:
-                return cpage, True
-        return None, False
-
-    def add_meta(self, cpage):
-        # Get current time value
-        current_time = datetime.now().time()
-        time_val     = ""
-        hour = 0
-        # Extract hour * 60, then add to minutes to get total current time in minutes
-        for digit in current_time.strftime("%H:%M"):
-            if not digit == ":":
-                time_val = time_val + digit
-            else:
-                hour = int(time_val) * 60
-                time_val = ""
-        time_val = int(time_val) + hour
-        values = [self.buffer_pool.meta_data.baseRID_count, time_val]
-
-        cpage.pages[1].write(values[0])
-        cpage.pages[2].write(values[1])
-        cpage.pages[3].append(np.zeros(len(cpage.pages) - 6))
-        cpage.pages[4].write(0)
-        cpage.pages[5].write(0)
-
     # """
     # Insert a record with specified columns
     # Return True upon succesful insertion
@@ -92,7 +61,7 @@ class Query:
         new_base_page  = self.buffer_pool.meta_data.baseRID_count  % MAX_PHYS_PAGE_SIZE  == 0
         new_page       = self.buffer_pool.meta_data.baseRID_count  % MAX_PHYS_PAGE_SIZE  == 0
         page_index     = (self.buffer_pool.meta_data.baseRID_count % MAX_BASE_PAGE_SIZE) // MAX_PHYS_PAGE_SIZE
-        record_index   = self.buffer_pool.meta_data.baseRID_count  % MAX_PHYS_PAGE_SIZE
+        rec_ind        = self.buffer_pool.meta_data.baseRID_count  % MAX_PHYS_PAGE_SIZE
         key            = columns[0]
         # if we need to create a new page range
         if new_page_range:
@@ -120,7 +89,7 @@ class Query:
                 cpage.isPinned = True
                 self.buffer_pool.populateConceptualPage(columns, cpage)
         self.add_meta(cpage)
-        location = (self.buffer_pool.meta_data.currpr, self.buffer_pool.meta_data.currbp, page_index, record_index)
+        location = (self.buffer_pool.meta_data.currpr, self.buffer_pool.meta_data.currbp, page_index, rec_ind)
         self.buffer_pool.meta_data.key_dict[key] = location
         self.buffer_pool.meta_data.baseRID_count += 1
         cpage.isPinned = False
@@ -128,11 +97,7 @@ class Query:
         return True
 
 
-    def get_rec_ind(self, cpage, key):
-        for rec_num in range(cpage.num_records):
-            rec_key = cpage.pages[6].retrieve(rec_num)
-            if rec_key == key:
-                return rec_num
+
 
     # """
     # Read a record with specified key
@@ -183,228 +148,41 @@ class Query:
                         values.append(None)
             records.append(Record(rec_RID, key, values))
             cpage.isPinned = False
+            # else:
+            #     # for key in self.buffer_pool.meta_data.key_dict.keys():
+            #
+            #
+            #     # loop through every goddamn base page in the whole damn database
+            #     # for key in self.bufferpool.meta_data.key_dict.keys()
+            #     # cpage=self.get_from_disk(key=key)
+            #     rec_index_list=[]
+            #     records_return_list=[]
+            #     rec_index=0
+            #     for rec_num in range(cpage.num_records):
+            #         rec_key = cpage.pages[6+column].retrieve(rec_num)
+            #         if rec_key == key:
+            #             rec_index = rec_num
+            #             rec_index_list.append(rec_index)
+            #     for rec_index in rec_index_list:
+            #         rec_RID = cpage.pages[1].retrieve(rec_index)
+            #         updated = False
+            #         indirection = cpage.pages[0]
+            #         if rec_RID in indirection.keys():
+            #             # DO SHIT WITH UPDATES SHIT HERE
+            #             tail_RID = indirection[rec_RID]
+            #             tail_pg  = self.getTailPage(tail_RID)
+            #             # Get values at schema encoded columns
+            #         else:
+            #             # if base record has not been updated: return base record
+            #             values_to_return = []
+            #             # checks query columns to see which columns we want to return. If 0: return None, else: return value
+            #             for i in range(len(query_columns)):
+            #                 if query_columns[i] == 0:
+            #                     values_to_return.append(None)
+            #                 else:
+            #                     values_to_return.append(cpage.pages[i+6].retrieve(rec_index))
+            #                     records_return_list.append(Record(rec_RID, value, values_to_return))
         return records
-
-        # else:
-        #     # for key in self.buffer_pool.meta_data.key_dict.keys():
-        #
-        #
-        #     # loop through every goddamn base page in the whole damn database
-        #     # for key in self.bufferpool.meta_data.key_dict.keys()
-        #     # cpage=self.get_from_disk(key=key)
-        #     rec_index_list=[]
-        #     records_return_list=[]
-        #     rec_index=0
-        #     for rec_num in range(cpage.num_records):
-        #         rec_key = cpage.pages[6+column].retrieve(rec_num)
-        #         if rec_key == key:
-        #             rec_index = rec_num
-        #             rec_index_list.append(rec_index)
-        #     for rec_index in rec_index_list:
-        #         rec_RID = cpage.pages[1].retrieve(rec_index)
-        #         updated = False
-        #         indirection = cpage.pages[0]
-        #         if rec_RID in indirection.keys():
-        #             # DO SHIT WITH UPDATES SHIT HERE
-        #             tail_RID = indirection[rec_RID]
-        #             tail_pg  = self.getTailPage(tail_RID)
-        #             # Get values at schema encoded columns
-        #         else:
-        #             # if base record has not been updated: return base record
-        #             values_to_return = []
-        #             # checks query columns to see which columns we want to return. If 0: return None, else: return value
-        #             for i in range(len(query_columns)):
-        #                 if query_columns[i] == 0:
-        #                     values_to_return.append(None)
-        #                 else:
-        #                     values_to_return.append(cpage.pages[i+6].retrieve(rec_index))
-        #                     records_return_list.append(Record(rec_RID, value, values_to_return))
-
-
-    # 2. Get the base_page you want to update
-    def get_from_disk(self, key=None, path=None):
-        if path == None:
-            # Is it in the bufferpool'
-            # location = (PR,BP,PP,Record)
-            location = self.buffer_pool.meta_data.key_dict[key]
-            path     = './template/ECS165/'+self.table.name+'/PR'+str(location[0])+'/BP'+str(location[1])
-            # Check which base_page has the path
-        cpage, is_in_buffer = self.in_buffer(path)
-        if not is_in_buffer:
-            with open(path, 'rb') as db_file:
-                cpage = pickle.load(db_file)
-        return cpage
-
-
-
-    # 1. Figure out which cols to update to
-    def colsToUpdate(self, key, *columns):
-        query_columns = []
-        for i, col in enumerate(columns):
-            if col != None:
-                query_columns.append(1)
-            else:
-                query_columns.append(0)
-        return query_columns
-
-
-    #def create_new_tail(self, columns, path):
-        #pass
-
-    def tail_in_indirection(self, tail_path, indirection):
-        for val in indirection.values():
-            if tail_path == val[0]:
-                return True
-
-        return False
-
-
-    def get_tail_page(self, base_page, key, prev, *columns):
-        base_page.isPinned = True
-        indirection        = base_page.pages[0]
-        base_rec_ind       = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
-        time_stamp_column  = base_page.pages[2]
-        base_schema_column = base_page.pages[3]
-        tps_column         = base_page.pages[4]
-        base_RID_column    = base_page.pages[5]
-        key_column         = base_page.pages[6]
-        base_rec_RID       = base_page.pages[1].retrieve(base_rec_ind)
-        # No tail page or full
-        pr_num = base_page.path.split('/')[4]
-        # ./template/ECS165/Grades/PRO/TP0
-        if base_rec_RID in indirection.keys():
-            tail_path, tail_rec_ind = indirection[base_rec_RID]
-        else:
-            tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
-        # './template/ECS165/Grades/PR0/TP0'
-        tail_page, is_in_buffer = self.in_buffer(tail_path)
-        if not is_in_buffer:
-            if not self.buffer_pool.first:
-                if self.tail_in_indirection(tail_path, indirection):
-                    with open(tail_path, "rb") as db_file:
-                        tail_file = pickle.load(db_file)
-                        if tail_file.full() and prev == False:
-                            tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
-                            tail_page, is_in_buffer = self.in_buffer(tail_path)
-                            if not is_in_buffer:
-                                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
-                            self.add_meta(tail_page)
-                        else:
-                            tail_page = tail_file
-                            self.buffer_pool.addConceptualPage(tail_page)
-                else:
-                    tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
-                    self.add_meta(tail_page)
-            else:
-                # the first page
-                self.buffer_pool.first = False
-                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
-                self.add_meta(tail_page)
-        else:
-            if tail_page.full() and prev == False:
-                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
-                tail_page, is_in_buffer = self.in_buffer(tail_path)
-                if not is_in_buffer:
-                    tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
-                self.add_meta(tail_page)
-
-        base_page.isPinned = False
-        return tail_page
-
-    def update_schema(self, base_schema, query_cols):
-        for i, col in enumerate(query_cols):
-            if col == 1:
-                base_schema[i] = 1
-
-
-    def update_tail_page(self, base_page, tail_page, key, *columns):
-        tail_page.isPinned = True
-        record_index = self.buffer_pool.meta_data.key_dict[key][3]
-        base_rec_RID     = base_page.pages[1].retrieve(record_index)
-        base_indirection = base_page.pages[0]
-        new_schema = copy.copy(base_page.pages[3][record_index])
-        old_schema = base_page.pages[3][record_index]
-        query_cols = self.colsToUpdate(key, *columns)
-        # Adds record to tail_page
-        self.update_schema(new_schema, query_cols)
-
-        # check if base record has been updated previously, if it has then grab the values from the previous update.
-        if base_rec_RID in base_indirection.keys():
-            prev_tail_path, prev_tail_rec_ind = base_indirection[base_rec_RID]
-            prev_tail_value = []
-            prev_tail_pg = self.get_tail_page(base_page, key, True, *columns)
-            prev_tail_pg.isPinned = True
-            for i in range(len(columns)):
-                prev_tail_value.append(prev_tail_pg.pages[6+i].retrieve(prev_tail_rec_ind))
-            prev_tail_pg.isPinned = False
-        if not np.array_equal(old_schema,new_schema):
-            # Add record_num
-            snapshot_col = []
-            # Goes thru to check which schema differed from the last
-            for i in range(len(old_schema)):
-                if new_schema[i] != old_schema[i]:
-                    snapshot_col.append(1)
-                else:
-                    snapshot_col.append(0)
-            # Create the snapshot HERE
-            # makes sure to update RID and tail page record num for the snapshot
-            for i, val in enumerate(snapshot_col):
-                if val == 1:
-                    tail_page.pages[i+6].write(base_page.pages[i+6].retrieve(record_index))
-                else:
-                    tail_page.pages[i+6].write(MAX_INT)
-            tail_page.num_records += 1
-            self.buffer_pool.meta_data.tailRID_count += 1
-            # if a snapshop needs to be created and there is only 1 available space in the current tail page: create new tail page
-            if tail_page.full():
-                tail_page.isPinned = False
-                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
-                tail_page = self.createConceptualPage(tail_path, True, *columns)
-                tail_page.isPinned = True
-            # Create tailpage HERE
-            for i, val in enumerate(new_schema):
-                # If page has update at column i
-                if val == 1:
-                    if columns[i] == None:
-                        # Set value to prev tail page value
-                        tail_page.pages[i+6].write(prev_tail_value[i])
-                    else:
-                        # Set value to updated value
-                        tail_page.pages[i+6].write(columns[i])
-                else:
-                    # Set value to None/MaxInt
-                    tail_page.pages[i+6].write(MAX_INT)
-            # UPDATE schema_col
-            tail_page.num_records += 1
-            self.buffer_pool.meta_data.tailRID_count += 1
-        else: #If we don't create a snapshot
-            # Create tail record HERE
-            if tail_page.full():
-                tail_page.isPinned = False
-                pr_num    = base_page.path.split("/")[3][2:]
-                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
-                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
-                tail_page.isPinned = True
-            for i, val in enumerate(new_schema):
-                if val == 1:
-                    if columns[i] == None:
-                        # Set value to prev tail page value
-                        tail_page.pages[i+6].write(prev_tail_value[i])
-                    else:
-                        # Set value to updated value
-                        tail_page.pages[i+6].write(columns[i])
-                else:
-                    # Set value to None/MaxInt
-                    tail_page.pages[i+6].write(MAX_INT)
-            tail_page.num_records += 1
-            self.buffer_pool.meta_data.tailRID_count += 1
-
-        base_page.pages[3][record_index] = new_schema
-        tail_rec_ind     = tail_page.num_records - 1
-        tail_path        = tail_page.path
-        # base_rec_RID     = base_page.pages[1].retrieve(record_index)
-        base_page.pages[0][base_rec_RID] = tail_path, tail_rec_ind
-        return True
 
     # """
     # Update a record with specified key and columns
@@ -413,7 +191,7 @@ class Query:
     # """
     def update(self, key, *columns):
         # """---New---"""
-        # columns_to_update = self.colsToUpdate(key, *columns)
+        # columns_to_update = self.get_query_cols(key, *columns)
         my_base_page = self.get_from_disk(key=key)
         base_page, is_in_buffer = self.in_buffer(my_base_page.path)
         if not is_in_buffer:
@@ -427,13 +205,51 @@ class Query:
         my_base_page.dirty    = True
         return True
 
-    def page_is_deleted(self, b_schema, indirection, rec_RID):
-        for val in b_schema:
-            if val == 1:
-                return False
-        if rec_RID in indirection.keys():
-            return True
-        return False
+    '''
+        Updates a tail record for a new update on a base record
+        - On first update for any column, add snapshot with the update
+    '''
+    def update_tail_page(self, base_page, tail_page, key, *columns):
+        tail_page.isPinned = True
+        rec_ind       = self.buffer_pool.meta_data.key_dict[key][3]
+        base_rec_RID       = base_page.pages[1].retrieve(rec_ind)
+        base_indirection   = base_page.pages[0]
+        new_schema = copy.copy(base_page.pages[3][rec_ind])
+        old_schema = base_page.pages[3][rec_ind]
+        # query_cols = self.get_query_cols(key, *columns)
+        query_cols = self.update_schema(new_schema, *columns)
+        prev_tail_values = []
+        # check if base record has been updated previously, if it has then grab the values from the previous update.
+        if base_rec_RID in base_indirection.keys():
+            prev_tail_values = self.get_prev_tail(key, rec_ind, base_rec_RID, base_page, *columns) # base_rec_RID, base_indirection)
+        # If first update for any column, save snapshot
+        if not np.array_equal(old_schema, new_schema):
+            self.create_snapshot(old_schema, new_schema, rec_ind, base_page, tail_page)
+            # if full after creating snapshot
+            if tail_page.full():
+                tail_page.isPinned = False
+                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+                tail_page = self.createConceptualPage(tail_path, True, *columns)
+                tail_page.isPinned = True
+            tail_page = self.create_tail(new_schema, prev_tail_values, tail_page, *columns)
+        else: #If we don't create a snapshot
+            # If full, create new tail page
+            if tail_page.full():
+                tail_page.isPinned = False
+                pr_num    = base_page.path.split("/")[3][2:]
+                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
+                tail_page.isPinned = True
+            tail_page = self.create_tail(new_schema, prev_tail_values, tail_page, *columns)
+
+        base_page.pages[3][rec_ind] = new_schema
+        tail_rec_ind     = tail_page.num_records - 1
+        tail_path        = tail_page.path
+        base_page.pages[0][base_rec_RID] = tail_path, tail_rec_ind
+        tail_page.isPinned = False
+        return True
+
+
     '''
     :param start_range: int         # Start of the key range to aggregate
     :param end_range: int           # End of the key range to aggregate
@@ -480,7 +296,7 @@ class Query:
                 curr_indirection = cpage.pages[0]           # from base_page.pages[0][base_rec_RID] = tail_path, tail_rec_ind
                 curr_rid         = cpage.pages[1].retrieve(i)
                 curr_key         = cpage.pages[6].retrieve(i)
-                if self.page_is_deleted(b_schema, curr_indirection, curr_rid):
+                if self.rec_is_deleted(b_schema, curr_indirection, curr_rid):
                     continue
                 if start_range <= curr_key <= end_range:
                     updated = curr_rid in curr_indirection.keys() and b_schema[aggregate_column_index] == 1 #checks if the rid is within the indirection key dictionary chek
@@ -512,3 +328,250 @@ class Query:
             u = self.update(key, *updated_columns)
             return u
         return False
+
+    '''
+        Gets tail page from buffer or disk
+        - if prev = True, then return tail even if it is full
+        - if prev = False, return new tail if prev is full
+    '''
+    def get_tail_page(self, base_page, key, prev, *columns):
+        base_page.isPinned = True
+        indirection  = base_page.pages[0]
+        base_rec_ind = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
+        base_rec_RID = base_page.pages[1].retrieve(base_rec_ind)   # RID of base record
+        pr_num       = base_page.path.split('/')[4]                # keep same PR as base page for tail
+        # If tail page exists, get values from indirection. Else create new tail path
+        if base_rec_RID in indirection.keys():
+            tail_path, tail_rec_ind = indirection[base_rec_RID]
+        else:
+            tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+        # if tail not in buffer, get from file and add to buffer_pool. Else just grab from buffer_pool
+        tail_page, is_in_buffer = self.in_buffer(tail_path)
+        if not is_in_buffer:
+            # The first tail page for the table should create a new one
+            if not self.buffer_pool.first:
+                # if
+                if self.tail_in_indirection(tail_path, indirection):
+                    with open(tail_path, "rb") as db_file:
+                        tail_file = pickle.load(db_file)
+                    if tail_file.full() and prev == False:
+                        tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
+                        tail_page, is_in_buffer = self.in_buffer(tail_path)
+                        if not is_in_buffer:
+                            tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
+                        self.add_meta(tail_page)
+                    else:
+                        tail_page = tail_file
+                        self.buffer_pool.addConceptualPage(tail_page)
+                else:
+                    tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
+                    self.add_meta(tail_page)
+            else:
+                # the first page
+                self.buffer_pool.first = False
+                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
+                self.add_meta(tail_page)
+        else:
+            if tail_page.full() and prev == False:
+                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
+                tail_page, is_in_buffer = self.in_buffer(tail_path)
+                if not is_in_buffer:
+                    tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
+                self.add_meta(tail_page)
+
+        base_page.isPinned = False
+        return tail_page
+
+    # '''
+    #     Gets a page from disk
+    #     - if no path, get path from key
+    # '''
+    # def get_from_disk(self, key=None, path=None):
+    #     # If no path, get path for base page from key
+    #     if path == None:
+    #         if key != None:
+    #             raise TypeError("No key value given to get_from_disk()")
+    #         location = self.buffer_pool.meta_data.key_dict[key]
+    #         path     = './template/ECS165/'+self.table.name+'/PR'+str(location[0])+'/BP'+str(location[1])
+    #     # if not in buffer, grab from disk
+    #     cpage, is_in_buffer = self.in_buffer(path)
+    #     if not is_in_buffer:
+    #         with open(path, 'rb') as db_file:
+    #             cpage = pickle.load(db_file)
+    #     return cpage
+
+    '''
+        Updates schema & returns the query columns to index updated cols
+    '''
+    def update_schema(self, base_schema, *columns):
+        # Get query cols from columns
+        query_cols = []
+        for i, col in enumerate(columns):
+            if col != None:
+                query_cols.append(1)
+            else:
+                query_cols.append(0)
+        # update the schema according to query cols
+        for i, col in enumerate(query_cols):
+            if col == 1:
+                base_schema[i] = 1
+        return query_cols
+
+    '''
+        Get tail page, even if it is full
+        - Helper for update_tail_page
+        - Assumes base_rid in base_indirection already
+        - Returns values so it is easier to process
+    '''
+    def get_prev_tail(self, key, rec_ind, base_rid, base_page, *columns):
+        base_rec_RID     = base_page.pages[1].retrieve(rec_ind)
+        base_indirection = base_page.pages[0]
+        prev_tail_path, prev_tail_rec_ind = base_indirection[base_rid]
+        prev_tail_values = []
+        prev_tail_pg     = self.get_tail_page(base_page, key, True, *columns)
+        prev_tail_pg.isPinned = True
+        for i in range(len(columns)):
+            prev_tail_values.append(prev_tail_pg.pages[6+i].retrieve(prev_tail_rec_ind))
+        prev_tail_pg.isPinned = False
+        return prev_tail_values
+
+    '''
+        Writes snapshot to tail page
+    '''
+    def create_snapshot(self, old_schema, new_schema, rec_ind, base_page, tail_page):
+        snapshot_col = []
+        # Goes through to check which schema different from last
+        for i in range(len(old_schema)):
+            if new_schema[i] != old_schema[i]:
+                snapshot_col.append(1)
+            else:
+                snapshot_col.append(0)
+        # makes sure to update RID and tail page record num for the snapshot
+        for i, val in enumerate(snapshot_col):
+            if val == 1:
+                tail_page.pages[i+6].write(base_page.pages[i+6].retrieve(rec_ind))
+            else:
+                tail_page.pages[i+6].write(MAX_INT)
+        tail_page.num_records += 1
+        self.buffer_pool.meta_data.tailRID_count += 1
+
+    '''
+        Writes tail record to tail page
+    '''
+    def create_tail(self, new_schema, prev_tail_values, tail_page, *columns):
+        for i, val in enumerate(new_schema):
+            # If page has update at column i
+            if val == 1:
+                if columns[i] == None:
+                    # Set value to prev tail page value
+                    tail_page.pages[i+6].write(prev_tail_values[i])
+                else:
+                    # Set value to updated value
+                    tail_page.pages[i+6].write(columns[i])
+            else:
+                # Set value to None/MaxInt
+                tail_page.pages[i+6].write(MAX_INT)
+        # UPDATE schema_col
+        tail_page.num_records += 1
+        self.buffer_pool.meta_data.tailRID_count += 1
+        return tail_page
+
+
+    '''
+        Creates a new page range directory in table dir
+    '''
+    def create_pr_dir(self):
+        os.mkdir(os.path.join('./template/ECS165/'+self.table.name, "PR"+str(self.buffer_pool.meta_data.currpr)))  #insert new PR and BP into disk
+
+    '''
+        Checks to see if a cpage is in buffer
+        - returns cpage, True if it is // None, False if it isn't
+    '''
+    def in_buffer(self, path):
+        for cpage in self.buffer_pool.conceptual_pages:
+            if cpage.path == path:
+                return cpage, True
+        return None, False
+
+    '''
+        Adds values to columns[0:5] when creating a cpage
+    '''
+    def add_meta(self, cpage):
+        # Get current time value
+        current_time = datetime.now().time()
+        time_val     = ""
+        hour         = 0
+        # Extract hour * 60, then add to minutes to get total current time in minutes
+        for digit in current_time.strftime("%H:%M"):
+            if not digit == ":":
+                time_val = time_val + digit
+            else:
+                hour = int(time_val) * 60
+                time_val = ""
+        time_val = int(time_val) + hour
+        values = [self.buffer_pool.meta_data.baseRID_count, time_val]
+        cpage.pages[1].write(values[0])  # Base_RID col
+        cpage.pages[2].write(values[1])  # Timestamp col
+        cpage.pages[3].append(np.zeros(len(cpage.pages) - 6)) # Schema
+        cpage.pages[4].write(0) # Other Base_RID
+        cpage.pages[5].write(0) # TPS col
+
+    '''
+        Checks to see if a record is deleted
+        - deleted if schema all 0's and indirection points to a tail record
+    '''
+    def rec_is_deleted(self, b_schema, indirection, rec_RID):
+        for val in b_schema:
+            if val == 1:
+                return False
+        if rec_RID in indirection.keys():
+            return True
+        return False
+
+    '''
+        Gets a page from disk
+        - if no path, get path from key
+    '''
+    def get_from_disk(self, key=None, path=None):
+        # If no path, get path for base page from key
+        if path == None:
+            if key == None:
+                raise TypeError("Key value is None: get_from_disk()")
+            location = self.buffer_pool.meta_data.key_dict[key]
+            path     = './template/ECS165/'+self.table.name+'/PR'+str(location[0])+'/BP'+str(location[1])
+        # if not in buffer, grab from disk
+        cpage, is_in_buffer = self.in_buffer(path)
+        if not is_in_buffer:
+            with open(path, 'rb') as db_file:
+                cpage = pickle.load(db_file)
+        return cpage
+
+
+
+    '''
+        Returns query columns for which columns need to be updated
+    '''
+    def get_query_cols(self, key, *columns):
+        query_columns = []
+        for i, col in enumerate(columns):
+            if col != None:
+                query_columns.append(1)
+            else:
+                query_columns.append(0)
+        return query_columns
+
+    '''
+        Returns True if tail record in base record indirection, else False
+    '''
+    def tail_in_indirection(self, tail_path, indirection):
+        for val in indirection.values():
+            if tail_path == val[0]:
+                return True
+
+        return False
+
+    def get_rec_ind(self, cpage, key):
+        for rec_num in range(cpage.num_records):
+            rec_key = cpage.pages[6].retrieve(rec_num)
+            if rec_key == key:
+                return rec_num

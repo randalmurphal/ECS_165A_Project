@@ -24,21 +24,11 @@ class Table:
     :param num_columns: int     #Number of Columns: all columns are integer
     :param key: int             #Index of table key in columns
     """
-    def __init__(self, name, num_columns, key): #when table is initialized we should
-        #need paths to current basepage (insert records into physical pages) and current page range (insert base pages intp page range)
-        self.currbp = 0
-        self.currpr = 0
-        # Want a page per num_columns
-        self.name = name
-        self.key = key
-        # Key is an RID
-        self.num_columns = num_columns
-        # Page_directory stores the basepages and to find the base page you want
-        #self.page_directory = []
-        self.key_dict = {}
-        # Given RID, return a page based off of the RID
-        self.index = Index(self)
-        self.RID_count = 0
-        self.tail_RID  = 0
-        self.init_key  = 0
-        self.buffer_pool = None
+    def __init__(self, name, num_columns, key):
+        self.currbp = 0                 # base page
+        self.currpr = 0                 # page range
+        self.name = name                # table name
+        self.key = key                  # table key
+        self.num_columns = num_columns  # table num columns
+        self.index = Index(self)        # Index columns
+        self.buffer_pool = None         # Main Buffer Pool object
