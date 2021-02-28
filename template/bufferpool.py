@@ -36,6 +36,7 @@ class BufferPool():
         Creates and adds new cpage to buffer_pool
         params: path of new page, bool for is_tail, and column values
                 for populate
+                - if is_tail, dont populate with column values
         returns the new cpage
     '''
     def createConceptualPage(self, path, is_tail, *columns):
