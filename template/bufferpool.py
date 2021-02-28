@@ -121,8 +121,9 @@ class BufferPool():
 
         self.remove_keys(temp_cpage)
         if temp_cpage.dirty:
+            path = temp_cpage.path
             temp_cpage.dirty = False
-            with open(temp_cpage.path, 'wb') as db_file:
+            with open(path, 'wb') as db_file:
                 pickle.dump(temp_cpage, db_file)
         # TypeError: file must have a 'write' attribute
 

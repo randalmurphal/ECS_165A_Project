@@ -39,44 +39,16 @@ class Query:
     """
     def delete(self, key):
         base_page = self.get_from_disk(key=key)
-        _, _, _, base_rec_ind = self.buffer_pool.key_dict[key]
+        _, is_in_buffer = self.in_buffer(base_page.path)
+        if not is_in_buffer:
+            self.buffer_pool.addConceptualPage(base_page)
+        _, _, _, base_rec_ind = self.buffer_pool.meta_data.key_dict[key]
 
         # Set schema to be 0's
         for i in range(len(base_page.pages[3][base_rec_ind])):
             base_page.pages[3][base_rec_ind][i] = 0
-        # Set indirection to something if didnt have something before
-        if not key in base_page.pages[0].keys():
-            # empty_tail = ConceptualPage([MAX_INT]*table.num_columns)
-            # self.add_meta(empty_tail)
-            
-            base_RID = base_page.pages[1].retrieve(base_rec_ind)
-            base_page.pages[0][base_RID] = tail_path, tail_rec_ind
-
-        # # Grab location of base record
-        # # ind = Index(self.table)
-        # # baseR_loc = ind.locate(key, 0, key)[0]
-        # baseR_loc = self.table.key_dict[key]
-        # baseR_p_range, baseR_base_pg, baseR_pg, baseR_rec = baseR_loc
-        # base_pages    = self.table.page_directory[baseR_p_range].range[0][baseR_base_pg].pages
-        # base_rid      = base_pages[1][baseR_pg].retrieve(baseR_rec)
-        # base_schema_i = 512*baseR_pg + baseR_rec
-        # base_schema   = base_pages[3][base_schema_i]
-        # p_range       = self.table.page_directory[baseR_p_range]
-        # # Check indirection column to see if has been updated
-        # indirection = base_pages[0]
-        # updated     = base_rid in indirection.keys()
-        # n_cols      = self.table.num_columns
-        # none_arr    = [None]*n_cols
-        # # If not updated, add tail page with MAX_INT vals and add to indirection
-        # if not updated:
-        #     # Update to add tail page with None for all values
-        #     self.update(key, *[None]*n_cols)
-        # else:
-        #     # Change base schema to all 0's, then update which gives None tail page
-        #     base_schema = np.zeros(n_cols)
-        #     self.update(key, *[None]*n_cols)
-        #
-        # return True
+        self.update(key, *[None]*self.table.num_columns)
+        return True
 
     def create_pr_dir(self):
         os.mkdir(os.path.join('./template/ECS165/'+self.table.name, "PR"+str(self.buffer_pool.meta_data.currpr)))  #insert new PR and BP into disk

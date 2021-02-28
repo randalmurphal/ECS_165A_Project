@@ -42,6 +42,3 @@ class Table:
         self.tail_RID  = 0
         self.init_key  = 0
         self.buffer_pool = None
-
-    def __merge(self):
-        pass
