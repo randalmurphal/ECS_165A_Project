@@ -13,57 +13,84 @@ keys = []
 records = {}
 num_iters = 10000
 
-insert_time_0 = process_time()
-# for i in range(0, 10000):
-# 	key = 906659671 + i
-# 	query.insert(key, 93, 0, 0, 0)
-# 	records[key] = [key, 93, 0, 0, 0]
-# 	keys.append(key)
-for i in range(0, num_iters):
-	key = 92106429 + randint(0, num_iters-1)
-	while key in records: # Prevents duplicate keys
-		key = 92106429 + randint(0, num_iters-1)
-	records[key] = [key, randint(0, 20), randint(0, 20), randint(0, 20), randint(0, 20)]
-	query.insert(*records[key])
-	keys.append(key)
-	# print('inserted', records[key])
-insert_time_1 = process_time()
-print("Inserting 10k records took:  \t\t\t", insert_time_1 - insert_time_0)
+key = 906659671
 
-# # Measuring update Performance
-# update_cols = [
-#     [randrange(0, 100), None, None, None, None],
-#     [None, randrange(0, 100), None, None, None],
-#     [None, None, randrange(0, 100), None, None],
-#     [None, None, None, randrange(0, 100), None],
-#     [None, None, None, None, randrange(0, 100)],
-# ]
+records[key] = [key, 1, 2, 3, 4]
+keys.append(key)
+query.insert(*records[key])
+key += 1
+records[key] = [key, 5, 6, 7, 8]
+keys.append(key)
+query.insert(*records[key])
+key += 1
+records[key] = [key, 9, 10, 11, 12]
+keys.append(key)
+query.insert(*records[key])
+
+query.update(keys[0], *[None, 11, None, None, None])
+
+query.update(keys[0], *[None, None, 12, None, None])
+
+query.update(keys[0], *[None, None, None, 13, None])
+# print(query.select(keys[0], 0, [1, 1, 1, 1, 1])[0].columns)
+# query.update(keys[1], *[None, 13, None, None, None])
+# query.update(keys[1], *[None, None, 14, None, None])
+# query.update(keys[2], *[None, 15, None, None, None])
+# query.update(keys[2], *[None, None, 16, None, None])
+# query.update(key, *[None, None, None, None, 14])
+# query.update(key, *[None, 15, None, None, None])
+print("hello")
+# insert_time_0 = process_time()
+# # for i in range(0, 10000):
+# # 	key = 906659671 + i
+# # 	query.insert(key, 93, 0, 0, 0)
+# # 	records[key] = [key, 93, 0, 0, 0]
+# # 	keys.append(key)
+# for i in range(0, num_iters):
+# 	key = 92106429 + randint(0, num_iters-1)
+# 	while key in records: # Prevents duplicate keys
+# 		key = 92106429 + randint(0, num_iters-1)
+# 	records[key] = [key, randint(0, 20), randint(0, 20), randint(0, 20), randint(0, 20)]
+# 	query.insert(*records[key])
+# 	keys.append(key)
+# 	# print('inserted', records[key])
+# insert_time_1 = process_time()
+# print("Inserting 10k records took:  \t\t\t", insert_time_1 - insert_time_0)
+#
+# # # Measuring update Performance
+# # update_cols = [
+# #     [randrange(0, 100), None, None, None, None],
+# #     [None, randrange(0, 100), None, None, None],
+# #     [None, None, randrange(0, 100), None, None],
+# #     [None, None, None, randrange(0, 100), None],
+# #     [None, None, None, None, randrange(0, 100)],
+# # ]
+# #
+# # update_time_0 = process_time()
+# # for i in range(0, 10000):
+# #     query.update(choice(keys), *(choice(update_cols)))
+# # update_time_1 = process_time()
+# # print("Updating 10k records took:  \t\t\t", update_time_1 - update_time_0)
 #
 # update_time_0 = process_time()
-# for i in range(0, 10000):
-#     query.update(choice(keys), *(choice(update_cols)))
+# for key in records:
+# 	updated_columns = [None, None, None, None, None]
+# 	for i in range(1, grades_table.num_columns):
+# 		value = randint(0, 20)
+# 		updated_columns[i] = value
+# 		original = records[key].copy()
+# 		records[key][i] = value
+# 		query.update(key, *updated_columns)
+# 		record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
+# 		error = False
+# 		for j, column in enumerate(record.columns):
+# 			if column != records[key][j]:
+# 				error = True
+# 		if error:
+# 			print('update error on', original, 'and', updated_columns, ':', record.columns, ', correct:', records[key])
+# 		updated_columns[i] = None
 # update_time_1 = process_time()
 # print("Updating 10k records took:  \t\t\t", update_time_1 - update_time_0)
-
-update_time_0 = process_time()
-for key in records:
-	updated_columns = [None, None, None, None, None]
-	for i in range(1, grades_table.num_columns):
-		value = randint(0, 20)
-		updated_columns[i] = value
-		original = records[key].copy()
-		records[key][i] = value
-		query.update(key, *updated_columns)
-		record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
-		error = False
-		for j, column in enumerate(record.columns):
-			if column != records[key][j]:
-				error = True
-		if error:
-			print('update error on', original, 'and', updated_columns, ':', record.columns, ', correct:', records[key])
-		updated_columns[i] = None
-update_time_1 = process_time()
-print("Updating 10k records took:  \t\t\t", update_time_1 - update_time_0)
 
 
 # Measuring Select Performance

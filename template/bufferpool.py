@@ -66,7 +66,7 @@ class BufferPool():
                 self.capacity += 1
                 return i
 
-    def createConceptualPage(self, path, *columns):
+    def createConceptualPage(self, path, tail, *columns):
         #1. Collect physical pages from array the conceptual page
         if len(columns) == 1:
             columns = columns[0]
@@ -79,8 +79,8 @@ class BufferPool():
                 cols.append(MAX_INT)
             else:
                 cols.append(col)
-
-        self.populateConceptualPage(cols, cpage)
+        if not tail:
+            self.populateConceptualPage(cols, cpage)
         self.addConceptualPage(cpage)
         return cpage
 
@@ -243,12 +243,53 @@ class BufferPool():
                 base_pages.append(base_page)
 
         return base_pages
+    def get_tail_pages(self,base_page):
+        tail_pages = []
+        indirection        = base_page.pages[0]
+        base_rec_ind       = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
+        time_stamp_column  = base_page.pages[2]
+        base_schema_column = base_page.pages[3]
+        tps_column         = base_page.pages[4]
+        base_RID_column    = base_page.pages[5]
+        key_column         = base_page.pages[6]
+        """
+        # Go thru the indirection
+        # for records in indirection:
+            # Go thru the indirection and look for the tail_paths and extract a value out of it
+            if indirection.
+        """
+    def create_base_copy(self,base_page):
+        # Take a
+        indirection        = base_page.pages[0]
+        tail_page_values = []
+        """
+        def addConceptualPage(self, conceptualPage):
+            ### Check if bufferpool is full & evict if necessary ###
+            # Check if conceptual_pages length > limit
+            if len(self.conceptual_pages) >= self.max_capacity:
+                self.evict()
+            self.add_keys(conceptualPage)
+            self.conceptual_pages.append(conceptualPage)
 
+        # Algorithm:
+        1) Create a new concept_page that holds all the records from the tail_pages
+        2) Return that page
+        new_base_page = ConceptualPage()
+        for rec_count, records in enumerate(indirection):
+            # records = (tailpath,tail_rid)
+            # Get tailpath and go to it
+            tail_path = records[0]
+            with open(tail_path,"rb") as db_file:
+                record_value = pickle.load(db_file)
+            new_base_page[rec_count] = records
+            pass
+        """
+        pass
     def merge(self):
         possible_merges = []
+        to_be_merged = []
         base_pages = self.get_base_pages()
         tail_pages = self.get_tail_pages(base_pages)
-
         # copy_of_base = self.create_copies()
         for base_page in base_pages:
             for base_record_num in range(512):

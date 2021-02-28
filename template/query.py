@@ -116,27 +116,28 @@ class Query:
             self.create_pr_dir()
             path = './ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
             # with new values written in
-            cpage = self.buffer_pool.createConceptualPage(path, *columns)
-
+            cpage = self.buffer_pool.createConceptualPage(path, False, *columns)
+            cpage.isPinned = True
         else:
             # if need new conceptual page, create in currpr directory
             if new_base_page:
                 self.buffer_pool.meta_data.currbp += 1
                 path = './ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
-                cpage = self.buffer_pool.createConceptualPage(path, *columns)
+                cpage = self.buffer_pool.createConceptualPage(path, False, *columns)
+                cpage.isPinned = True
             else:
                 path = './ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
                 cpage, is_in_buffer = self.in_buffer(path)
                 if not is_in_buffer:
                     cpage = self.get_from_disk(key=key, path=path)
+                    cpage.isPinned = True
                     self.buffer_pool.addConceptualPage(cpage)
-
                 self.buffer_pool.populateConceptualPage(columns, cpage)
-
         self.add_meta(cpage)
         location = (self.buffer_pool.meta_data.currpr, self.buffer_pool.meta_data.currbp, page_index, record_index)
         self.buffer_pool.meta_data.key_dict[key] = location
         self.buffer_pool.meta_data.baseRID_count += 1
+        cpage.isPinned = False
         return True
 
 
@@ -162,6 +163,7 @@ class Query:
             # get base page (checks if in buffer or not)
             key   = value
             cpage = self.get_from_disk(key=key)
+            cpage.isPinned = True
             # Get index of record based on key
             rec_index = self.get_rec_ind(cpage, key)
             rec_RID   = cpage.pages[1].retrieve(rec_index)
@@ -172,7 +174,8 @@ class Query:
             if rec_RID in indirection.keys():
                 columns = [None] * self.table.num_columns
                 tail_path, tail_rec_ind = indirection[rec_RID]
-                tail_page = self.get_tail_page(cpage, key, *columns)
+                tail_page = self.get_tail_page(cpage, key, True, *columns)
+                tail_page.isPinned = True
                 # 92106429, 2#2, 12, 2, 1
                 for i, val in enumerate(b_schema):
                     if query_columns[i] == 1:
@@ -184,6 +187,7 @@ class Query:
                             values.append(tail_page.pages[6+i].retrieve(tail_rec_ind))
                     else:
                         values.append(None)
+                tail_page.isPinned = False
             # Hasnt been updated, grab all values according to query_columns
             else:
                 for i, val in enumerate(query_columns):
@@ -192,8 +196,9 @@ class Query:
                     else:
                         values.append(None)
             records.append(Record(rec_RID, key, values))
+            cpage.isPinned = False
             # original: key, 7, 6, 2, 10
-            # base: key, 15???, 6, 2, 10 -- Should be same as original
+            # base: key, 15 ???, 6, 2, 10 -- Should be same as original
             # tail: max, 2, max, max, max -- I guess tail should be: key/max, 7, 14, max, max (makes me think just wrong tail page -- indirection?)
             # schema = [0, 1, 0, 0, 0]    -- schema should be [0, 1, 1, 0, 0] -- so maybe also not updating schema properly?
             # records[0].columns = key, 2, 6, 1, 10 -- correct = key, 7, 14, 2, 10 ?????????
@@ -241,6 +246,7 @@ class Query:
     def get_from_disk(self, key=None, path=None):
         if path == None:
             # Is it in the bufferpool'
+            # location = (PR,BP,PP,Record)
             location = self.buffer_pool.meta_data.key_dict[key]
             path     = './ECS165/'+self.table.name+'/PR'+str(location[0])+'/BP'+str(location[1])
             # Check which base_page has the path
@@ -274,18 +280,23 @@ class Query:
         return False
 
 
-    def get_tail_page(self, base_page, key, *columns):
+    def get_tail_page(self, base_page, key, prev, *columns):
+        base_page.isPinned = True
         indirection        = base_page.pages[0]
-        RID_of_base        = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
+        base_rec_ind       = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
         time_stamp_column  = base_page.pages[2]
         base_schema_column = base_page.pages[3]
         tps_column         = base_page.pages[4]
         base_RID_column    = base_page.pages[5]
         key_column         = base_page.pages[6]
+        base_rec_RID       = base_page.pages[1].retrieve(base_rec_ind)
         # No tail page or full
         pr_num = base_page.path.split('/')[3]
         # ./ECS165/Grades/PRO/TP0
-        tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+        if base_rec_RID in indirection.keys():
+            tail_path, tail_rec_ind = indirection[base_rec_RID]
+        else:
+            tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
         # './ECS165/Grades/PR0/TP0'
         tail_page, is_in_buffer = self.in_buffer(tail_path)
         if not is_in_buffer:
@@ -293,23 +304,31 @@ class Query:
                 if self.tail_in_indirection(tail_path, indirection):
                     with open(tail_path, "rb") as db_file:
                         tail_file = pickle.load(db_file)
-                        if tail_file.full():
-                            tail_page = self.buffer_pool.createConceptualPage(tail_path, *columns)
+                        if tail_file.full() and prev == False:
+                            tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
+                            tail_page, is_in_buffer = self.in_buffer(tail_path)
+                            if not is_in_buffer:
+                                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                             self.add_meta(tail_page)
                         else:
                             tail_page = tail_file
                 else:
-                    tail_page = self.buffer_pool.createConceptualPage(tail_path, *columns)
+                    tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                     self.add_meta(tail_page)
             else:
-                # Not the first page
+                # the first page
                 self.buffer_pool.first = False
-                tail_page = self.buffer_pool.createConceptualPage(tail_path, *columns)
+                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                 self.add_meta(tail_page)
         else:
-            if tail_page.full():
-                tail_page = self.buffer_pool.createConceptualPage(tail_path, *columns)
+            if tail_page.full() and prev == False:
+                tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
+                tail_page, is_in_buffer = self.in_buffer(tail_path)
+                if not is_in_buffer:
+                    tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                 self.add_meta(tail_page)
+
+        base_page.isPinned = False
         return tail_page
 
     def update_schema(self, base_schema, query_cols):
@@ -317,9 +336,11 @@ class Query:
             if col == 1:
                 base_schema[i] = 1
 
+
     def update_tail_page(self, base_page, tail_page, key, *columns):
+        tail_page.isPinned = True
         record_index = self.buffer_pool.meta_data.key_dict[key][3]
-        # base_rec_RID     = base_page.pages[1].retrieve(record_index)
+        base_rec_RID     = base_page.pages[1].retrieve(record_index)
         base_indirection = base_page.pages[0]
         new_schema = copy.copy(base_page.pages[3][record_index])
         old_schema = base_page.pages[3][record_index]
@@ -329,8 +350,23 @@ class Query:
         # Old:[0,0,1,0,0]
         # New:[0,1,1,0,0]
         # Snapshot_col = [0,1,0,0,0]
-        if old_schema.all() != new_schema.all():
-            self.buffer_pool.meta_data.tailRID_count += 1
+
+        # check if base record has been updated previously, if it has then grab the values from the previous update.
+        if base_rec_RID in base_indirection.keys():
+            prev_tail_path, prev_tail_rec_ind = base_indirection[base_rec_RID]
+            prev_tail_value = []
+            prev_tail_pg = self.get_tail_page(base_page, key, True, *columns)
+            prev_tail_pg.isPinned = True
+            # print(prev_tail_pg.num_records)
+            # if prev_tail_pg.num_records == 0:
+            #     # Fetch prev tail_page
+            #     print("myPrevTailPage", prev_tail_pg)
+            #     raise("new tail in prev")
+            for i in range(len(columns)):
+                prev_tail_value.append(prev_tail_pg.pages[6+i].retrieve(prev_tail_rec_ind))
+            prev_tail_pg.isPinned = False
+        if not np.array_equal(old_schema,new_schema):
+            # Add record_num
             snapshot_col = []
             # Goes thru to check which schema differed from the last
             for i in range(len(old_schema)):
@@ -339,36 +375,63 @@ class Query:
                 else:
                     snapshot_col.append(0)
             # Create the snapshot HERE
+            #makes sure to update RID and tail page record num for the snapshot
             for i, val in enumerate(snapshot_col):
                 if val == 1:
                     tail_page.pages[i+6].write(base_page.pages[i+6].retrieve(record_index))
                 else:
                     tail_page.pages[i+6].write(MAX_INT)
-
+            tail_page.num_records += 1
+            self.buffer_pool.meta_data.tailRID_count += 1
+            # if a snapshop needs to be created and there is only 1 available space in the current tail page: create new tail page
+            if tail_page.full():
+                tail_page.isPinned = False
+                tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+                tail_page = self.createConceptualPage(tail_path, True, *columns)
+                tail_page.isPinned = True
             # Create tailpage HERE
-            for i, val in enumerate(query_cols):
+            for i, val in enumerate(new_schema):
+                # If page has update at column i
                 if val == 1:
-                    tail_page.pages[i+6].write(columns[i])
-                # else:
-                #     tail_page.pages[i+6].write(MAX_INT)
+                    if columns[i] == None:
+                        # Set value to prev tail page value
+                        tail_page.pages[i+6].write(prev_tail_value[i])
+                    else:
+                        # Set value to updated value
+                        tail_page.pages[i+6].write(columns[i])
+                else:
+                    # Set value to None/MaxInt
+                    tail_page.pages[i+6].write(MAX_INT)
             # UPDATE schema_col
             # base_page.pages[3][record_index] = new_schema
+            tail_page.num_records += 1
+            self.buffer_pool.meta_data.tailRID_count += 1
         else: #If we don't create a snapshot
-            # Create tailpage HERE
-            for i, val in enumerate(query_cols):
+            # Create tail record HERE
+            if tail_page.full():
+                tail_page.isPinned = False
+                tail_path = './ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+                tail_page = self.createConceptualPage(tail_path, True, *columns)
+                tail_page.isPinned = True
+            for i, val in enumerate(new_schema):
                 if val == 1:
-                    tail_page.pages[i+6].write(columns[i])
-                # else:
-                #     tail_page.pages[i+6].write(MAX_INT)
+                    if columns[i] == None:
+                        # Set value to prev tail page value
+                        tail_page.pages[i+6].write(prev_tail_value[i])
+                    else:
+                        # Set value to updated value
+                        tail_page.pages[i+6].write(columns[i])
+                else:
+                    # Set value to None/MaxInt
+                    tail_page.pages[i+6].write(MAX_INT)
+            tail_page.num_records += 1
+            self.buffer_pool.meta_data.tailRID_count += 1
 
         base_page.pages[3][record_index] = new_schema
-
-        self.buffer_pool.meta_data.tailRID_count += 1
-        tail_rec_ind = tail_page.num_records - 1
-        tail_path    = tail_page.path
-        base_rec_RID     = base_page.pages[1].retrieve(record_index)
+        tail_rec_ind     = tail_page.num_records - 1
+        tail_path        = tail_page.path
+        # base_rec_RID     = base_page.pages[1].retrieve(record_index)
         base_page.pages[0][base_rec_RID] = tail_path, tail_rec_ind
-        # base_indirection[base_rec_RID] = tail_path, tail_rec_ind
         return True
 
     # def update_tail_page(self, base_page, tail_page, key, *columns):
@@ -443,8 +506,16 @@ class Query:
         # """---New---"""
         # columns_to_update = self.colsToUpdate(key, *columns)
         my_base_page = self.get_from_disk(key=key)
-        tail_page = self.get_tail_page(my_base_page, key, *columns)
-        return self.update_tail_page(my_base_page, tail_page, key, *columns)
+        base_page, is_in_buffer = self.in_buffer(my_base_page.path)
+        if not is_in_buffer:
+            self.buffer_pool.addConceptualPage(my_base_page)
+        else:
+            my_base_page = base_page
+        my_base_page.isPinned = True
+        tail_page = self.get_tail_page(my_base_page, key, False, *columns)
+        self.update_tail_page(my_base_page, tail_page, key, *columns)
+        my_base_page.isPinned = False
+        return True
 
     def page_is_deleted(self, b_schema, indirection, rec_RID):
         for val in b_schema:
@@ -485,14 +556,19 @@ class Query:
                 path = os.path.join(subdir, file)
                 if not re.match(regex, path) == None:
                     file_paths.append(path)
+        for path in self.buffer_pool.buffer_keys.keys():
+            file_paths.append(path)
+
+        file_paths = list(set(file_paths))
 
         started  = False
         finished = False
+        if finished_key => key => start_key:
+            pass
         for path in file_paths:
             # get base page from path
             cpage = self.get_from_disk(path=path)
             cpage.isPinned = True
-
             _, is_in_buffer = self.in_buffer(path)
             if not is_in_buffer:
                 self.buffer_pool.addConceptualPage(cpage)
@@ -514,16 +590,19 @@ class Query:
 
                 if rec_RID in indirection.keys() and b_schema[aggregate_column_index] == 1:
                     columns = [None] * self.table.num_columns
-                    tail_page = self.get_tail_page(cpage, key, *columns)
+                    tail_page = self.get_tail_page(cpage, key, False, *columns)
+                    tail_page.isPinned = True
                     tail_path, tail_rec_ind = indirection[rec_RID]
-
-                    sum += tail_page.pages[aggregate_column_index+6].retrieve(tail_rec_ind)
+                    if started:
+                        sum += tail_page.pages[aggregate_column_index+6].retrieve(tail_rec_ind)
                     if started and finished:
                         cpage.isPinned = False
                         return sum
                 else:
-                    sum += cpage.pages[aggregate_column_index+6].retrieve(i)
+                    if started:
+                        sum += cpage.pages[aggregate_column_index+6].retrieve(i)
                     if started and finished:
+                        # sum += cpage.pages[aggregate_column_index+6].retrieve(i)
                         cpage.isPinned = False
                         return sum
 

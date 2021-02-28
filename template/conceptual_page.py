@@ -18,7 +18,7 @@ class ConceptualPage:
         # self.key_dict    = {}
         self.add_columns(columns)
 
-    def update_num_records(self,page):
+    def update_num_records(self):
         self.num_records += 1
 
     def full(self):
