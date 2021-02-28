@@ -1,6 +1,9 @@
-from template.db import Database
-from template.query import Query
-from template.config import init
+from db import Database
+from query import Query
+from config import init
+# from template.db import Database
+# from template.query import Query
+# from template.config import init
 
 from random import choice, randint, sample, seed
 init()
@@ -26,9 +29,9 @@ for _ in range(10):
             value = randint(0, 20)
             records[key][j] = value
 keys = sorted(list(records.keys()))
-for key in keys:
-    print(records[key])
-    print(records[key])
+# for key in keys:
+#     print(records[key])
+#     print(records[key])
 
 for key in keys:
     record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
@@ -40,10 +43,10 @@ for key in keys:
         print('select error on', key, ':', record, ', correct:', records[key])
 print("Select finished")
 
-deleted_keys = sample(keys, 100)
-for key in deleted_keys:
-    query.delete(key)
-    records.pop(key, None)
+# deleted_keys = sample(keys, 100)
+# for key in deleted_keys:
+#     query.delete(key)
+#     records.pop(key, None)
 
 for i in range(0, 100):
     r = sorted(sample(range(0, len(keys)), 2))
