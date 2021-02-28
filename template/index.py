@@ -38,9 +38,9 @@ class Index:
         key_dict  = self.table.key_dict
         b_loc     = key_dict[begin]
         b_p_range, b_base_pg, b_page, b_record = b_loc
-        # For when main asks for 10k + 1 key, but only inserted 10k keys
-        if end == self.table.init_key + self.table.RID_count:
-            end -= 1
+        # # For when main asks for 10k + 1 key, but only inserted 10k keys
+        # if end == self.table.init_key + self.table.RID_count:
+        #     end -= 1
         e_loc     = key_dict[end]
         e_p_range, e_base_pg, e_page, e_record = e_loc
 

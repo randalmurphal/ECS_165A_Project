@@ -55,4 +55,4 @@ class Page:
 			offset  = offset+1
 			# except IndexError:
 				# print("IndexError:", offset, self.num_records)
-		return int.from_bytes(temp,byteorder='big')
+		return int.from_bytes(temp, byteorder='big')

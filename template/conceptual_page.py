@@ -7,6 +7,9 @@ import numpy as np
 1: RID column
 2: TimeStamp Column
 3: Schema Encoding
+4: TPS
+5: base_RID
+6: Tail_RID
 '''
 class ConceptualPage:
 
@@ -15,6 +18,7 @@ class ConceptualPage:
         self.num_records = 0
         self.path        = ''
         self.isPinned    = False
+        self.dirty       = True
         # self.key_dict    = {}
         self.add_columns(columns)
 

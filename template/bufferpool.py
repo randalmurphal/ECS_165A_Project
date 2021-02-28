@@ -32,8 +32,8 @@ class MetaData():
         self.tailRID_count = 0
         # Key:(table,page_range)
         # Might want to make this a file
-        self.key_dict = {} #Which file to look at structed key:path
-        self.indexes = {} #This is for create_index in index.py
+        self.key_dict = {} #Which file to look at structed key:location
+        self.indexes  = {} #This is for create_index in index.py
         self.newPageNecessary = False
         # For Inserting Records
         # self.insertion_conceptual_page =
@@ -117,10 +117,13 @@ class BufferPool():
                 i = 0
             temp_cpage = self.conceptual_pages[i]
         temp_cpage = self.conceptual_pages.pop(i)
+        temp_cpage.isPinned = False
 
         self.remove_keys(temp_cpage)
-        with open(temp_cpage.path, 'wb') as db_file:
-            pickle.dump(temp_cpage, db_file)
+        if temp_cpage.dirty:
+            temp_cpage.dirty = False
+            with open(temp_cpage.path, 'wb') as db_file:
+                pickle.dump(temp_cpage, db_file)
         # TypeError: file must have a 'write' attribute
 
     #def commit(self):  #commit changes in bufferpool to memory
@@ -133,26 +136,14 @@ class BufferPool():
         return -1
 
     def close(self): # evict everything from bufferpool
-        for i,value in enumerate(self.conceptual_pages):
-            if value:
-                with open(value.path, 'wb') as db_file:
-                    pickle.dump(value,db_file)
-
+        while self.conceptual_pages:
+            self.evict()
 
     def remove_keys(self, conceptual_page):
-        try:
-            del self.buffer_keys[conceptual_page.path]
-        except:
-            print(self.buffer_keys, conceptual_page.path)
-        # for i in range(conceptual_page.num_records):
-        #     key_i = conceptual_page.pages[6].retrieve(i)
-        #     del self.buffer_keys[conceptual_page.path]
+        del self.buffer_keys[conceptual_page.path]
 
     def add_keys(self, conceptual_page):
         self.buffer_keys[conceptual_page.path] = conceptual_page
-        # for i in range(conceptual_page.num_records):
-        #     key_i = conceptual_page.pages[6].retrieve(i)
-        #     self.buffer_keys[conceptual_page.path] = conceptual_page
 
     # Returns base & tail pages for merging
     def id_merge_pages(self):
@@ -182,39 +173,7 @@ class BufferPool():
     # Add full base_pages into the array?
     # 3. Get tail_pages corresponding to the base_pages you want to merge
         # 3.1 You can do this by using the BaseRID column(Which tells you which tail_page corresponding to the base_page)
-    def identify_pages_to_merge(self):
 
-        #since tail and base pages are in the same folder
-        # we have to loop through every conceptual page and check if it's a base page
-        #then loop through schema encoding and see if it needs to be merged
-
-        self.add_base_page(base_page)
-
-        #if conceptual_page.pages[0]
-        #check through all  base pages and  check if
-        merge_base_pages=[]
-        merge_tail_pages=[]
-        # for conceptual_page  in # BP directory :
-        #     #look at schema encoding column
-        #     for i in range(0,8):
-        #         if conceptual_page.pages[3].retrieve(i)== 1 :
-        #
-        #             if conceptual_page in merge_base_pages:
-        #                 continue
-        #             else:
-        #                 merge_base_pages.append(conceptual_page)
-        #             #find tail pages associated w/ this  base pages
-        #             # ignore the tail page if we already have it in our list
-        #             #otherwise append
-        #             #PLACEHOLDER CODE
-        #             tailRID, tail_page_path = conceptual_page.pages[0].retrieve()
-        #             tail_page = tail_page_path[0] #?
-        #             if tail_page in merge_tail_pages:
-        #                 continue
-        #             else:
-        #                 merge_tail_pages.append(tail_page)
-        #     return merge_base_pages, merge_tail_pages
-    #
     # def get_tail_pages(self, base_pages):
     #     tail_paths = []
     #     for base_page in base_pages:
@@ -244,6 +203,7 @@ class BufferPool():
 
         return base_pages
     def get_tail_pages(self,base_page):
+        tail_page_paths = []
         tail_pages = []
         indirection        = base_page.pages[0]
         base_rec_ind       = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
@@ -252,47 +212,47 @@ class BufferPool():
         tps_column         = base_page.pages[4]
         base_RID_column    = base_page.pages[5]
         key_column         = base_page.pages[6]
-        """
-        # Go thru the indirection
-        # for records in indirection:
-            # Go thru the indirection and look for the tail_paths and extract a value out of it
-            if indirection.
-        """
+
+        # 1.Go thru the indirection and get all tail_paths
+        # Add all paths to the tail page that aren't duplicates
+        # record = baseRID:(path,tail_RID)
+        for records in indirection:
+            if records[0] not in tail_pages:
+                tail_page_paths.append(records[0])
+
+        # Create tail_page objects here
+        for path in tail_page_paths:
+            with open(path,"rb") as db_file:
+                tail_page_obj = pickle.load(db_file)
+                tail_pages.append(tail_page_obj)
+        return tail_pages, base_RID_column
+
     def create_base_copy(self,base_page):
         # Take a
         indirection        = base_page.pages[0]
+        tail_page_objs, base_RID_column = get_tail_pages(base_page)
         tail_page_values = []
-        """
-        def addConceptualPage(self, conceptualPage):
-            ### Check if bufferpool is full & evict if necessary ###
-            # Check if conceptual_pages length > limit
-            if len(self.conceptual_pages) >= self.max_capacity:
-                self.evict()
-            self.add_keys(conceptualPage)
-            self.conceptual_pages.append(conceptualPage)
+        new_base_page = copy.copy(base_page)
+        for i, key in enumerate(base_RID_column):
+            for j, tail_page in tail_page_objs:
+                if key in tail_page[j].pages[0]:
+                    for k in range(len(base_page.pages[3][0])):
+                        new_value = tail_page.pages[k+6].retrieve(tail_record_num)
+                        tail_page[j].pages[k+6].overWrite(ne,new_value)
+                    # Here we want the values
+                    break
 
-        # Algorithm:
-        1) Create a new concept_page that holds all the records from the tail_pages
-        2) Return that page
-        new_base_page = ConceptualPage()
-        for rec_count, records in enumerate(indirection):
-            # records = (tailpath,tail_rid)
-            # Get tailpath and go to it
-            tail_path = records[0]
-            with open(tail_path,"rb") as db_file:
-                record_value = pickle.load(db_file)
-            new_base_page[rec_count] = records
-            pass
-        """
-        pass
     def merge(self):
         possible_merges = []
         to_be_merged = []
         base_pages = self.get_base_pages()
         tail_pages = self.get_tail_pages(base_pages)
+        for base_page in base_pages:
+            tail_pages = self.get_tail_pages(base_pages)
+            create_base_copy(base_page)
         # copy_of_base = self.create_copies()
         for base_page in base_pages:
-            for base_record_num in range(512):
+            for base_record_num in range(512):                                    #should this be 511? starts from 0
                 base_record_RID = base_page.pages[1].retrieve(base_record_num)
                 merge_key_dict[base_record_RID] = (base_page, base_record_num)
 
@@ -330,7 +290,9 @@ class BufferPool():
                         # writes the new value into the base record
                         base_page_containing_base_record.pages[column_num].overWrite(base_record_num, new_value)
 
-
+        self.merge_bases.clear()  #Clear the merge lists
+        self.merge_tails.clear()
+        return True
 
 
 

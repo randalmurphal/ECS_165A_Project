@@ -34,14 +34,14 @@ class Table:
         # Key is an RID
         self.num_columns = num_columns
         # Page_directory stores the basepages and to find the base page you want
-        self.page_directory = []
+        #self.page_directory = []
         self.key_dict = {}
         # Given RID, return a page based off of the RID
         self.index = Index(self)
         self.RID_count = 0
         self.tail_RID  = 0
         self.init_key  = 0
-        self.bufferpool = BufferPool(name)
-
+        self.buffer_pool = None
+        
     def __merge(self):
         pass
