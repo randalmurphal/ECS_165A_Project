@@ -1,10 +1,7 @@
 from template.config import *
 from template.page import Page
 from template.conceptual_page import ConceptualPage
-import pickle
-import os
-import threading
-import math
+import math, threading, os, pickle, copy
 import numpy as np
 
 MAX_INT = int(math.pow(2, 63) - 1)
@@ -120,41 +117,45 @@ class BufferPool():
     def get_base_pages(self):
         base_pages = []
         for path in self.merge_bases:
-            with open(path, "rb") as db_file:
-                base_page = pickle.load(db_file)
-                base_pages.append(base_page)
+            base_page, is_in_buffer = self.in_buffer(path)
+            if not is_in_buffer:
+                with open(path, "rb") as db_file:
+                    base_page = pickle.load(db_file)
+            base_pages.append(base_page)
 
         return base_pages
 
-    def get_tail_pages(self,base_page):
-        tail_page_paths = []
-        tail_pages = []
-        indirection         = base_page.pages[0]
-        base_rec_ind        = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
-        base_rec_RID_column = base_page.pages[1]
-        time_stamp_column   = base_page.pages[2]
-        base_schema_column  = base_page.pages[3]
-        tps_column          = base_page.pages[4]
-        baseRID_column      = base_page.pages[5]
-        key_column          = base_page.pages[6]
+    def get_tail_pages(self, base_page):
+        # tail_page_paths = []
+        # tail_pages = []
+        # indirection         = base_page.pages[0]
+        # base_rec_ind        = self.meta_data.key_dict[key][3] # record num in bp
+        # base_rec_RID_column = base_page.pages[1]
+        # time_stamp_column   = base_page.pages[2]
+        # base_schema_column  = base_page.pages[3]
+        # tps_column          = base_page.pages[4]
+        # baseRID_column      = base_page.pages[5]
+        # key_column          = base_page.pages[6]
         # 1.Go thru the indirection and get all tail_paths
         # Add all paths to the tail page that aren't duplicates
         # record = baseRID:(path,tail_RID)
-        for records in indirection:
-            if records[0] not in tail_pages:
-                tail_page_paths.append(records[0])
-
+        # for records in indirection:
+        #     if records[0] not in tail_pages:
+        #         tail_page_paths.append(records[0])
         # Create tail_page objects here
-        for path in tail_page_paths:
-            with open(path,"rb") as db_file:
-                tail_page_obj = pickle.load(db_file)
-                tail_pages.append(tail_page_obj)
-        return tail_pages, base_rec_RID_column
+        tail_pages = []
+        for path in self.merge_tails:
+            tail_page, is_in_buffer = self.in_buffer(path)
+            if not is_in_buffer:
+                with open(path, "rb") as db_file:
+                    tail_page = pickle.load(db_file)
+            tail_pages.append(tail_page)
+        return tail_pages
 
-    def create_base_copy(self,base_page,tail_pages):
-        new_base_page = copy.deepcopy(base_page)
-        indirection        = new_base_page.pages[0]
-        tail_page_objs, base_rec_RID_column = tail_pages
+    def create_base_copy(self, base_page, tail_pages):
+        new_base_page  = copy.deepcopy(base_page)
+        indirection    = new_base_page.pages[0]
+        tail_page_objs = tail_pages
         tail_page_values = []
         new_base_page.pages[1]
         baseRID:(tail_path,tail_RID)
@@ -172,7 +173,7 @@ class BufferPool():
                     # go through schema encoding of base record
                     for k in range(len(base_page.pages[3][base_rec_num])):
                         # if schema encoding 0: keep original base record value for that column
-                        if base_page.pages[3][k] == 0:
+                        if base_page.pages[3][base_rec_num][k] == 0:
                             pass
                         # if schema encoding 1: grab new value from tail page and overwrite for that column
                         else:
@@ -190,7 +191,11 @@ class BufferPool():
             pickle.dump(base_page, db_file)
         return new_path
 
-    def change_dict_vals(self,base_page, new_base_path):
+    '''
+        For each key in consolidated base page, change key path to be
+        new base page in merge
+    '''
+    def change_dict_vals(self, base_page, new_base_path):
         # Take the dictionary, and iterate through it for KEYS
         # If the key is the same as the key in the base_page, then replace the key's value with the new one
         # Redefine keys to map to keys:new_base_path
@@ -199,14 +204,14 @@ class BufferPool():
         # Path = ./ECS165/Grades/PR#/BP#_M#
         #path.split('/') = ['.', 'ECS165', 'Grades', 'PR1', 'BP2_M4']
         path = base_page.path
-        pr_num = path.split('/')[3][2:]
-        bp_num = (((path.split('/')[4]).split('_'))[0])[2:]
-        m_num = (((path.split('/')[4]).split('_'))[1])[1:]
-        #rec_num = 0
+        pr_num = path.split('/')[4][2:]
+        bp_str = path.split('/')[5].split('_')
+        bp_num = bp_str[0][2:]
+        m_num  = base_page.merge_num
 
-        for record_num in range(base_page.num_records):
-            record_key = base_page.pages[6].retrieve(record_num)
-            new_loc = (pr_num,bp_num,m_num,record_num)
+        for rec_ind in range(base_page.num_records):
+            record_key = base_page.pages[6].retrieve(rec_ind)
+            new_loc = (pr_num, bp_num, m_num, rec_ind)
             self.meta_data.key_dict[record_key] = new_loc
 
         # while count != 512:
@@ -232,16 +237,18 @@ class BufferPool():
         # 5. Create a new file called # Path = ./ECS165/Grades/PR#/BP#_M#
         # 6. Go through the key_dict and find all the Keys that are equalivent to the keys in the new_base_page and replace path
         possible_merges = []
-        to_be_merged = []
+        # to_be_merged = self.merge_bases
         base_pages = self.get_base_pages()
         # tail_pages = self.get_tail_pages(base_pages)
-        for base_page in to_be_merged:
+        base_pages = self.get_base_pages()
+        for base_page in base_pages:
             merge_num = base_page.merge_num
-            base_page.merge_num += 1
             tail_pages = self.get_tail_pages(base_page)
             new_base = self.create_base_copy(base_page, tail_pages)
             new_base_path = self.set_new_path(new_base, merge_num)
             self.change_dict_vals(new_base, new_base_path)
+            base_page.merge_num += 1
+        return
         # copy_of_base = self.create_copies()
         # for base_page in base_pages:
         #     for base_record_num in range(512):                                    #should this be 511? starts from 0
@@ -284,7 +291,17 @@ class BufferPool():
         #
         # self.merge_bases.clear()  #Clear the merge lists
         # self.merge_tails.clear()
-        return True
+        # return True
+
+    '''
+        Checks to see if a cpage is in buffer
+        - returns cpage, True if it is // None, False if it isn't
+    '''
+    def in_buffer(self, path):
+        for cpage in self.conceptual_pages:
+            if cpage.path == path:
+                return cpage, True
+        return None, False
 
 
 

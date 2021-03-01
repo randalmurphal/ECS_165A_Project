@@ -1,4 +1,4 @@
-import os, re
+import os, re, pickle
 import numpy as np
 """
 A data strucutre holding indices for various columns of a table. Key column should be indexd by default,
@@ -115,19 +115,21 @@ class Index:
     def get_base_paths(self):
         regex = re.compile("./template/ECS165/%s/PR[0-9]+/BP[0-9]+"%self.table.name)
         rootdir = './template/ECS165/'
-        base_paths = []
+        file_paths = []
         # Check in disk
-        for subdir, dirs, files in os.walk(rootdir):
+        for subdir, dirs, files in os.walk(rootdir, topdown=False):
             for file in files:
-                path = os.path.join(subdir, file)
+                path = os.path.join(subdir, file) # path to file
                 # if it matches with some value within the current path, append
-                if not re.match(regex, path) == None:
-                    base_paths.append(path)
+                regex_match = not re.match(regex, path) == None
+                if regex_match:
+                    file_paths.append(path)
         # Check in buffer_pool
         for path in self.table.buffer_pool.buffer_keys.keys():
-            if not re.match(regex, path) == None:
-                base_paths.append(path)
-        return list(set(base_paths))
+            regex_match = not re.match(regex, path) == None
+            if regex_match:
+                file_paths.append(path)
+        return list(set(file_paths)) # removes duplicates
 
     '''
         Returns tail page & its index if it is in base_page indirection, else None
