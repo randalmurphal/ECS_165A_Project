@@ -5,6 +5,7 @@ from template.page_range import PageRange
 from template.page import Page
 from template.bufferpool import BufferPool
 
+import threading
 from random import randint
 import numpy as np
 import time, math, pickle, re, os
@@ -254,7 +255,7 @@ class Query:
         return record
 
     '''
-        Returns record from path
+        Returns records from paths
     '''
     def get_records(self, path, value, column, query_columns):
         records = []
@@ -458,9 +459,7 @@ class Query:
             cpage.isPinned = False
         return sum
 
-
     ### ******* Sum Helpers ******* ###
-
     '''
         Gets all base page paths in disk and buffer_pool
             - Uses regex to match with all base pages when searching in disk/buf
@@ -470,16 +469,20 @@ class Query:
         regex = re.compile("./template/ECS165/%s/PR[0-9]+/BP[0-9]+"%self.table.name)
         rootdir = './template/ECS165/'
         file_paths = []
+        seen = []
         # Check in disk
-        for subdir, dirs, files in os.walk(rootdir):
+        for subdir, dirs, files in os.walk(rootdir, topdown=False):
             for file in files:
                 path = os.path.join(subdir, file) # path to file
                 # if it matches with some value within the current path, append
-                if not re.match(regex, path) == None:
+                split = path.split('_')
+                regex_match = not re.match(regex, path) == None
+                if split[0] not in seen and regex_match:
+                    seen.append(split[0])
                     file_paths.append(path)
         # Check in buffer_pool
         for path in self.buffer_pool.buffer_keys.keys():
-            if not re.match(regex, path) == None:
+            if not re.match(regex, path) == None and path.split('_')[0] not in seen:
                 file_paths.append(path)
         return list(set(file_paths)) # removes duplicates
 

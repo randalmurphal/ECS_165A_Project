@@ -116,7 +116,7 @@ class BufferPool():
 
     def get_base_pages(self):
         base_pages = []
-        for path in self.merge_bases:
+        for i, path in enumerate(self.merge_bases):
             base_page, is_in_buffer = self.in_buffer(path)
             if not is_in_buffer:
                 with open(path, "rb") as db_file:
@@ -126,23 +126,6 @@ class BufferPool():
         return base_pages
 
     def get_tail_pages(self, base_page):
-        # tail_page_paths = []
-        # tail_pages = []
-        # indirection         = base_page.pages[0]
-        # base_rec_ind        = self.meta_data.key_dict[key][3] # record num in bp
-        # base_rec_RID_column = base_page.pages[1]
-        # time_stamp_column   = base_page.pages[2]
-        # base_schema_column  = base_page.pages[3]
-        # tps_column          = base_page.pages[4]
-        # baseRID_column      = base_page.pages[5]
-        # key_column          = base_page.pages[6]
-        # 1.Go thru the indirection and get all tail_paths
-        # Add all paths to the tail page that aren't duplicates
-        # record = baseRID:(path,tail_RID)
-        # for records in indirection:
-        #     if records[0] not in tail_pages:
-        #         tail_page_paths.append(records[0])
-        # Create tail_page objects here
         tail_pages = []
         for path in self.merge_tails:
             tail_page, is_in_buffer = self.in_buffer(path)
@@ -222,76 +205,29 @@ class BufferPool():
         #             count += 1
 
     '''
-        - No limit to memory for merge
-        - Get Base pages that are ready for merge
-            - Get corresponding tail pages
-        - Create copy of current base page
-        - Merge Tail Pages with base page copy
-        - Create new base page path
+        1. Get a base_page from the set of possible merges
+        2. Get the corresponding tail_pages
+        3. Create a new copy of the base_page
+        4. Merge the tail_pages with the new base_page
+        5. Create a new file called # Path = ./ECS165/Grades/PR#/BP#_M#
+        6. Go through the key_dict and find all the Keys that are equalivent
+            to the keys in the new_base_page and replace path
     '''
     def merge(self):
-        # 1. Get a base_page from the set of possible merges
-        # 2. Get the corresponding tail_pages
-        # 3. Create a new copy of the base_page
-        # 4. Merge the tail_pages with the new base_page
-        # 5. Create a new file called # Path = ./ECS165/Grades/PR#/BP#_M#
-        # 6. Go through the key_dict and find all the Keys that are equalivent to the keys in the new_base_page and replace path
-        possible_merges = []
-        # to_be_merged = self.merge_bases
         base_pages = self.get_base_pages()
-        # tail_pages = self.get_tail_pages(base_pages)
-        base_pages = self.get_base_pages()
+        i = 0
         for base_page in base_pages:
+            if base_page.isPinned:
+                i += 1
+                continue
             merge_num = base_page.merge_num
             tail_pages = self.get_tail_pages(base_page)
             new_base = self.create_base_copy(base_page, tail_pages)
             new_base_path = self.set_new_path(new_base, merge_num)
             self.change_dict_vals(new_base, new_base_path)
+            self.merge_bases.pop(i)
             base_page.merge_num += 1
         return
-        # copy_of_base = self.create_copies()
-        # for base_page in base_pages:
-        #     for base_record_num in range(512):                                    #should this be 511? starts from 0
-        #         base_record_RID = base_page.pages[1].retrieve(base_record_num)
-        #         merge_key_dict[base_record_RID] = (base_page, base_record_num)
-        #
-        # # to check if the base record has already had an update merged with it
-        # base_records_already_updated = []
-        #
-        # # iterate through all tail pages we pulled in
-        # for tail_page in tail_pages:
-        #     # iterate through all tail records in a given tail page
-        #     for tail_record_num in range(511, -1, -1):
-        #         # Determine the original base record for this tail record
-        #         tail_record_BaseRID = tail_page.pages[5].retrieve(tail_record_num)
-        #         # Check if we have already merged an update to this base record.
-        #         # If we have merged an update: skip this tail record.
-        #         if tail_record_BaseRID in base_records_already_updated:
-        #             continue
-        #         # grab the record TID and check if it is less than the TPS number
-        #         # of the base record: if so, skip this tail record.
-        #         tail_record_TID = tail_page.pages[1].retrieve(tail_record_num)
-        #         base_page_containing_base_record, base_record_num = merge_RID_dict[tail_record_BaseRID][0], merge_RID_dict[tail_record_BaseRID][1]
-        #         base_record_TPS = base_page_containing_base_record.pages[4].retrieve(base_record_num)
-        #         if base_record_TPS >= tail_record_TID:
-        #             continue
-        #         # We can now proceed with updating the values in the base record
-        #         # with the appropriate values from the tail record
-        #         num_columns = len(tail_page.pages[6:])
-        #         offset = 6
-        #
-        #         for column_num in range(offset, num_columns + offset):
-        #             new_value = tail_page.pages[column_num].retrieve(tail_record_num)
-        #             # skips to the next column if null
-        #             if new_value == MAX_INT:
-        #                 continue
-        #             else:
-        #                 # writes the new value into the base record
-        #                 base_page_containing_base_record.pages[column_num].overWrite(base_record_num, new_value)
-        #
-        # self.merge_bases.clear()  #Clear the merge lists
-        # self.merge_tails.clear()
-        # return True
 
     '''
         Checks to see if a cpage is in buffer
@@ -302,141 +238,3 @@ class BufferPool():
             if cpage.path == path:
                 return cpage, True
         return None, False
-
-
-
-        # Update 8192 records
-        '''
-        1.  Identify which tail pages are to be merged:
-        Possible methods for this:
-            - Tail page records we are merging should be consecutive
-            - Preferably use tail page records that are filled
-            - Records should be committed
-        after 4096 updates
-        2. Load corresponding base pages for tail pages
-            - Create copies, NOT references to the original base pages
-        3. Consolide (actually do the fucking merge)
-        4. Update the key_dir in bufferpool metadata to ensure
-        '''
-        # merge_base_pages, merge_tail_pages = self.id_merge_pages()
-        #
-        # merge_RID_dir = copy.copy(self.buffer_pool.meta_data.key_dir)
-        # merge_RID_dict = {}
-        # Identify base pages and tail pages we will be using during merge, add them to the appropriate arrays
-
-        # 2. Make a copy of those base_pages
-        # 3. Get tail_pages corresponding to the base_pages you want to merge
-            # 3.1 You can do this by using the BaseRID column(Which tells you which tail_page corresponding to the base_page)
-        # 4. If you have multiple tail_pages, use the most updated one
-        # 5. The base_page_copy's values then becomes the tail_pages value(iterate backwards)
-        # 1. Get the base_pages you want to merge (Based off of something)
-
-        # self.merge_paths = []
-        # self.corresponding_tail_pages = [(BP, tail_page_object)]
-        # Create a new thread for merge
-        # # update at x count
-        # merge_t = threading.Thread(target=merge)
-        # merge_t.start() # Starts running thread in background
-        # ret_val = merge_t.join() # waits until thread is done
-
-        # 1. Get the base_pages you want to merge (Based off of something)
-        # 2. Make a copy of those base_pages
-
-
-# '''
-#TODO actually add pages to merge_bases
-    def add_base_page(self, base_page):
-        self.merge_bases.append(base_page.path)
-
-    def create_copy_of_base(self):
-        pass
-
-    # def create_copy_of_base_pages(self, base_pages, num_merges=20):
-    #     for i in range(num_merges):
-    #         # loop through self.merge_bases
-    #         # 1. Add to a new path???
-    #         # New directory?
-    #         pass
-    def update_base_page(self):
-        # 1. Grab copy of base_page
-        # 2. Get most recent tail_page corresponding to the base
-        # BP1, BP2, TP1, TP2, TP3
-        # Go to the BP, then the indirection and get the path for ALL the tailpages
-        pass
-
-
-    # Add full base_pages into the array?
-    # 3. Get tail_pages corresponding to the base_pages you want to merge
-        # 3.1 You can do this by using the BaseRID column(Which tells you which tail_page corresponding to the base_page)
-
-    # def get_tail_pages(self, base_pages):
-    #     tail_paths = []
-    #     for base_page in base_pages:
-    #         # Look at indirection, figure out which tail page
-    #         indirection = base_page.pages[0]
-    #         for i, record in enumerate(base_page.pages[6]):
-    #             key = record.retrieve(i)
-    #             if key in indirection.keys():
-    #                 tail_paths.append(indirection[key][1])
-    #     # Remove duplicate values in tail_paths
-    #     tail_paths = list(set(tail_paths))
-    #     # Get tail pages off of paths
-    #     tail_pages = {}
-    #     for path in tail_paths:
-    #         with open(path, "rb") as db_file:
-    #             tail_page = pickle.load(db_file)
-    #             tail_pages[path] = tail_page
-    #
-    #     return tail_pages
-
-# Cliff merge code vvvv
-
-#         # add base record RIDs to local merge dict
-#         for base_page in merge_base_pages:
-#             for base_record_num in range(512):
-#                 base_record_RID = base_page.pages[1].retrieve(base_record_num)
-#                 merge_key_dict[base_record_RID] = (base_page, base_record_num)
-#
-#         # to check if the base record has already had an update merged with it
-#         base_records_already_updated = []
-#
-#         # iterate through all tail pages we pulled in
-#         for tail_page in merge_tail_pages:
-#             # iterate through all tail records in a given tail page
-#             for tail_record_num in range(511, -1, -1):
-#                 # Determine the original base record for this tail record
-#                 tail_record_BaseRID = tail_page.pages[5].retrieve(tail_record_num)
-#
-#                 # Check if we have already merged an update to this base record. If we have merged an update: skip this tail record.
-#                 if tail_record_BaseRID in base_records_already_updated:
-#                     continue
-# 512
-# B0
-# 1000
-#                 # grab the record TID and check if it is less than the TPS number of the base record: if so, skip this tail record.
-#                 tail_record_TID = tail_page.pages[1].retrieve(tail_record_num)
-#                 base_page_containing_base_record, base_record_num = merge_RID_dict[tail_record_BaseRID][0], merge_RID_dict[tail_record_BaseRID][1]
-#                 base_record_TPS = base_page_containing_base_record.pages[4].retrieve(base_record_num)
-#                 if base_record_TPS >= tail_record_TID:
-#                     continue
-#
-#                 # We can now proceed with updating the values in the base record with the appropriate values from the tail record
-#                 num_columns = len(tail_page.pages[6:])
-#                 offset = 6
-#
-#                 for column_num in range(offset, num_columns + offset):
-#                     new_value = tail_page.pages[column_num].retrieve(tail_record_num)
-#                     # skips to the next column if null
-#                     if new_value == MAX_INT:
-#                         continue
-#                     else:
-#                         # writes the new value into the base record
-#                         base_page_containing_base_record.pages[column_num].overWrite(base_record_num, new_value)
-
-        # after consolidating, update key_directory
-        # for base_page in merge_base_pages:
-
-                # after consolidating , update key page_directory
-        # def update_key_dict(mergedBasePages)
-        #     self.buffer_pool.metadata.key_dict[key]= ?...
-# '''
