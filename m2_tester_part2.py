@@ -53,5 +53,5 @@ for i in range(0, 100):
     if column_sum != result:
         print('sum error on [', keys[r[0]], ',', keys[r[1]], ']: ', result, ', correct: ', column_sum)
 print("Aggregate finished")
-
+grades_table.index.drop_index(0)
 db.close()
