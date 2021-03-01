@@ -9,6 +9,7 @@ db = Database()
 db.open('./ECS165')
 
 grades_table = db.create_table('Grades', 5, 0)
+grades_table.index.create_index(0)
 query = Query(grades_table)
 
 # repopulate with random data
@@ -65,5 +66,4 @@ for i in range(0, 100):
     # else:
     #     print('sum on [', keys[r[0]], ',', keys[r[1]], ']: ', column_sum)
 print("Aggregate finished")
-grades_table.index.create_index(0)
 db.close()
