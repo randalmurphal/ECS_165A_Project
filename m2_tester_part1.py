@@ -20,10 +20,13 @@ for i in range(0, 1000):
     query.insert(*records[key])
 keys = sorted(list(records.keys()))
 print("Insert finished")
+grades_table.index.create_index(0)
 
 for key in keys:
     record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
     error = False
+    # print(record.columns.columns)
+    # print(records[key])
     for i, column in enumerate(record.columns):
         if column != records[key][i]:
             error = True
@@ -48,9 +51,9 @@ for _ in range(10):
                 if column != records[key][j]:
                     error = True
             if error:
-                print('update error on', original, 'and', updated_columns, ':', record, ', correct:', records[key])
-            # else:
-            #     print('update on', original, 'and', updated_columns, ':', record)
+                print('update error on', original, 'and', updated_columns, ':', record.columns, ', correct:', records[key])
+            else:
+                print('update on', original, 'and', updated_columns, ':', record.columns)
             updated_columns[i] = None
 print("Update finished")
 

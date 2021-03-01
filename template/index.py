@@ -1,3 +1,5 @@
+import os, re
+import numpy as np
 """
 A data strucutre holding indices for various columns of a table. Key column should be indexd by default,
 other columns can be indexed through this object. Indices are usually B-Trees, but other data structures
@@ -73,17 +75,109 @@ class Index:
         return vals
 
     """
-    # optional: Create index on specific column
+        Creates an index for specified column
+            - column_value -> [paths with this value]
     """
 
     def create_index(self, column_number):
-        # Iterate through all base_pages and tail_pages collect all the values in the column_number
-        # Create a dictionary [Value:[Paths]]
-        pass
+        index = {} # map from value: [(rec_ind, page_path), ...)]
+        # Get all base pages
+        base_paths = self.get_base_paths()
+        # For each value/updated valkue in column index, add to dict
+        for path in base_paths:
+            base_page = self.get_page(path)
+            for rec_ind in range(base_page.num_records):
+                tail = self.get_tail_page(rec_ind, base_page)
+                base_schema = base_page.pages[3][rec_ind]
+                if tail==None or base_schema[column_number]==0:
+                    # check value from base
+                    if not self.rec_is_deleted(rec_ind, base_page):
+                        value = base_page.pages[column_number+6].retrieve(rec_ind)
+                        if value not in index.keys():
+                            index[value] = []
+                        index[value].append((rec_ind, path))
+                else:
+                    tail_page, tail_rec_ind = tail
+                    # Grab value from tail -> base path
+                    value = tail_page.pages[column_number+6].retrieve(tail_rec_ind)
+                    # If not already in index, add array to append paths to
+                    if value not in index.keys():
+                        index[value] = []
+                    index[value].append((rec_ind, path))
+
+        self.table.index.indices[column_number] = index
+
+    ### ******* Create_Index Helpers ******* ###
+
+    '''
+        Returns all paths for all base pages in disk & buffer
+    '''
+    def get_base_paths(self):
+        regex = re.compile("./template/ECS165/%s/PR[0-9]+/BP[0-9]+"%self.table.name)
+        rootdir = './template/ECS165/'
+        base_paths = []
+        # Check in disk
+        for subdir, dirs, files in os.walk(rootdir):
+            for file in files:
+                path = os.path.join(subdir, file)
+                # if it matches with some value within the current path, append
+                if not re.match(regex, path) == None:
+                    base_paths.append(path)
+        # Check in buffer_pool
+        for path in self.table.buffer_pool.buffer_keys.keys():
+            if not re.match(regex, path) == None:
+                base_paths.append(path)
+        return list(set(base_paths))
+
+    '''
+        Returns tail page & its index if it is in base_page indirection, else None
+    '''
+    def get_tail_page(self, rec_ind, base_page):
+        # key          = base_page.pages[6].retrieve(rec_ind)
+        # base_rec_ind = self.table.buffer_pool.meta_data.key_dict[key][3]
+        indirection = base_page.pages[0]
+        base_RID    = base_page.pages[1].retrieve(rec_ind)
+        if base_RID not in indirection.keys():
+            return None
+        tail_path, tail_rec_ind = indirection[base_RID]
+        return self.get_page(tail_path), tail_rec_ind
+
+    '''
+        Returns page from disk
+    '''
+    def get_page(self, path):
+        # if not in buffer, grab from disk
+        cpage, is_in_buffer = self.in_buffer(path)
+        if not is_in_buffer:
+            with open(path, 'rb') as db_file:
+                cpage = pickle.load(db_file)
+        return cpage
+
+    '''
+        Returns page, True if in buffer, else None, False
+    '''
+    def in_buffer(self, path):
+        for cpage in self.table.buffer_pool.conceptual_pages:
+            if cpage.path == path:
+                return cpage, True
+        return None, False
+
+    def rec_is_deleted(self, rec_num, cpage):
+        indirection = cpage.pages[0]
+        rec_RID     = cpage.pages[1].retrieve(rec_num)
+        b_schema    = cpage.pages[3][rec_num]
+        for val in b_schema:
+            if val == 1:
+                return False
+        if rec_RID in indirection.keys():
+            return True
+        return False
+
+    ### ******* End of Create_Index Helpers ******* ###
 
     """
-    # optional: Drop index of specific column
+        Remove an index from Index.indices (set index to None)
     """
 
     def drop_index(self, column_number):
-        pass
+        self.indices[column_number] = None

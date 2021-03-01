@@ -22,12 +22,13 @@ class MetaData():
 
 class BufferPool():
 
-    def __init__(self, table_name):
+    def __init__(self, table_name, num_columns):
         self.meta_data        = MetaData() # holds table meta data
         self.max_capacity     = 16         # max number of cpages in buffer
         self.conceptual_pages = []         # cpage objects
         self.buffer_keys      = {}         # page_path: page_object
         self.table_name       = table_name # name of table
+        # self.index_arr        = [None]*num_columns
         self.merge_bases      = []         # holds bp paths ready to merge
         self.merge_tails      = []         # holds tail pages for merge bases
         self.first            = True       # for manual check to make first PR

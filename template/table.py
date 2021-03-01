@@ -25,10 +25,10 @@ class Table:
     :param key: int             #Index of table key in columns
     """
     def __init__(self, name, num_columns, key):
-        self.currbp = 0                 # base page
-        self.currpr = 0                 # page range
-        self.name = name                # table name
-        self.key = key                  # table key
+        self.currbp      = 0            # base page
+        self.currpr      = 0            # page range
+        self.name        = name         # table name
+        self.key         = key          # table key
         self.num_columns = num_columns  # table num columns
-        self.index = Index(self)        # Index columns
+        self.index       = Index(self)  # Index columns-
         self.buffer_pool = None         # Main Buffer Pool object

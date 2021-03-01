@@ -137,7 +137,40 @@ class Query:
         self.buffer_pool.meta_data.baseRID_count += 1
 
     ### ******* End of Insert Helpers ******* ###
-
+# else:
+#     # for key in self.buffer_pool.meta_data.key_dict.keys():
+#
+#
+#     # loop through every goddamn base page in the whole damn database
+#     # for key in self.bufferpool.meta_data.key_dict.keys()
+#     # cpage=self.get_from_disk(key=key)
+#     rec_index_list=[]
+#     records_return_list=[]
+#     rec_index=0
+#     for rec_num in range(cpage.num_records):
+#         rec_key = cpage.pages[6+column].retrieve(rec_num)
+#         if rec_key == key:
+#             rec_index = rec_num
+#             rec_index_list.append(rec_index)
+#     for rec_index in rec_index_list:
+#         rec_RID = cpage.pages[1].retrieve(rec_index)
+#         updated = False
+#         indirection = cpage.pages[0]
+#         if rec_RID in indirection.keys():
+#             # DO SHIT WITH UPDATES SHIT HERE
+#             tail_RID = indirection[rec_RID]
+#             tail_pg  = self.getTailPage(tail_RID)
+#             # Get values at schema encoded columns
+#         else:
+#             # if base record has not been updated: return base record
+#             values_to_return = []
+#             # checks query columns to see which columns we want to return. If 0: return None, else: return value
+#             for i in range(len(query_columns)):
+#                 if query_columns[i] == 0:
+#                     values_to_return.append(None)
+#                 else:
+#                     values_to_return.append(cpage.pages[i+6].retrieve(rec_index))
+#                     records_return_list.append(Record(rec_RID, value, values_to_return))
     """
     Read a record with specified key
     :param key: the key value to select records based on
@@ -148,80 +181,133 @@ class Query:
     """
 
     def select(self, value, column, query_columns):
-        values  = [] # (rec_RID, key, columns) [1, 1, 0, 0] -> [val, val, None, None]
         records = []
-        if column == 0:
+        # if key column
+        if column != 0:
             # get base page (checks if in buffer or not)
             key   = value
             cpage = self.get_from_disk(key=key)
             cpage.isPinned = True
+            self.buffer_pool.addConceptualPage(cpage)
             # Get index of record based on key
             rec_index = self.get_rec_ind(cpage, key)
             rec_RID   = cpage.pages[1].retrieve(rec_index)
             indirection = cpage.pages[0]
-            b_schema    = cpage.pages[3][rec_index]
-
             # if record has been updated => grab newest values from tail page
             if rec_RID in indirection.keys():
-                columns = [None] * self.table.num_columns
-                tail_path, tail_rec_ind = indirection[rec_RID]
-                tail_page = self.get_tail_page(cpage, key, True, *columns)
-                tail_page.isPinned = True
-                for i, val in enumerate(b_schema):
-                    if query_columns[i] == 1:
-                        if val == 0:
-                            # grab from base
-                            values.append(cpage.pages[6+i].retrieve(rec_index))
-                        else:
-                            # grab from tail
-                            values.append(tail_page.pages[6+i].retrieve(tail_rec_ind))
-                    else:
-                        values.append(None)
-                tail_page.isPinned = False
+                record = self.get_updated_values(key, query_columns, cpage)
             # Hasnt been updated, grab all values according to query_columns
             else:
-                for i, val in enumerate(query_columns):
-                    if val == 1:
-                        values.append(cpage.pages[6+i].retrieve(rec_index))
-                    else:
-                        values.append(None)
-            records.append(Record(rec_RID, key, values))
+                record = self.get_base_values(key, query_columns, cpage)
+            records.append(record)
             cpage.isPinned = False
-            # else:
-            #     # for key in self.buffer_pool.meta_data.key_dict.keys():
-            #
-            #
-            #     # loop through every goddamn base page in the whole damn database
-            #     # for key in self.bufferpool.meta_data.key_dict.keys()
-            #     # cpage=self.get_from_disk(key=key)
-            #     rec_index_list=[]
-            #     records_return_list=[]
-            #     rec_index=0
-            #     for rec_num in range(cpage.num_records):
-            #         rec_key = cpage.pages[6+column].retrieve(rec_num)
-            #         if rec_key == key:
-            #             rec_index = rec_num
-            #             rec_index_list.append(rec_index)
-            #     for rec_index in rec_index_list:
-            #         rec_RID = cpage.pages[1].retrieve(rec_index)
-            #         updated = False
-            #         indirection = cpage.pages[0]
-            #         if rec_RID in indirection.keys():
-            #             # DO SHIT WITH UPDATES SHIT HERE
-            #             tail_RID = indirection[rec_RID]
-            #             tail_pg  = self.getTailPage(tail_RID)
-            #             # Get values at schema encoded columns
-            #         else:
-            #             # if base record has not been updated: return base record
-            #             values_to_return = []
-            #             # checks query columns to see which columns we want to return. If 0: return None, else: return value
-            #             for i in range(len(query_columns)):
-            #                 if query_columns[i] == 0:
-            #                     values_to_return.append(None)
-            #                 else:
-            #                     values_to_return.append(cpage.pages[i+6].retrieve(rec_index))
-            #                     records_return_list.append(Record(rec_RID, value, values_to_return))
+        else:
+            if self.index_exists(column):
+                index = self.table.index.indices[column]
+                if value in index.keys():
+                    val_index = index[value]
+                    for rec_val in val_index:
+                        rec_ind, path = rec_val
+                        record = self.get_from_index(rec_ind, path, query_columns)
+                        records.append(record)
+            else:
+                base_paths = self.get_base_paths()
+                # Search through entire disk for all base pages
+                for path in base_paths:
+                    record_vals = self.get_records(path, value, column, query_columns)
+                    records = list(np.concatenate((records, record_vals)))
         return records
+
+    ### Select Helpers ###
+    '''
+        Return record with vals from tail page if update, base page if not
+    '''
+    def get_updated_values(self, key, query_columns, cpage):
+        values      = []
+        rec_index   = self.get_rec_ind(cpage, key)
+        rec_RID     = cpage.pages[1].retrieve(rec_index)
+        indirection = cpage.pages[0]
+        b_schema    = cpage.pages[3][rec_index]
+        tail_path, tail_rec_ind = indirection[rec_RID]
+        tail_page   = self.get_tail_page(cpage, key, True, *[None]*self.table.num_columns)
+        tail_page.isPinned = True
+        for i, val in enumerate(b_schema):
+            if query_columns[i] == 1:
+                if val == 0:
+                    # grab from base
+                    values.append(cpage.pages[6+i].retrieve(rec_index))
+                else:
+                    # grab from tail
+                    values.append(tail_page.pages[6+i].retrieve(tail_rec_ind))
+            else:
+                values.append(None)
+        tail_page.isPinned = False
+        return Record(rec_RID, key, values)
+
+    '''
+        Returns record from key
+    '''
+    def get_base_values(self, key, query_cols, cpage):
+        values    = []
+        rec_index = self.get_rec_ind(cpage, key)
+        base_RID  = cpage.pages[1].retrieve(rec_index)
+        for i, val in enumerate(query_cols):
+            if val == 1:
+                values.append(cpage.pages[6+i].retrieve(rec_index))
+            else:
+                values.append(None)
+        return Record(base_RID, key, values)
+
+    '''
+        Returns True if index in index_arr, else False
+    '''
+    def index_exists(self, col_num):
+        if self.table.index.indices[col_num] != None:
+            return True
+        return False
+
+    '''
+        Returns record from index map
+    '''
+    def get_from_index(self, rec_ind, path, query_columns):
+        base_page = self.get_from_disk(path=path)
+        self.buffer_pool.addConceptualPage(base_page)
+        base_page.isPinned = True
+        base_RID     = base_page.pages[1].retrieve(rec_ind)
+        key          = base_page.pages[6].retrieve(rec_ind)
+        indirection  = base_page.pages[0]
+        if base_RID in indirection.keys():
+            record = self.get_updated_values(key, query_columns, base_page)
+        else:
+            record = self.get_base_values(key, query_columns, base_page)
+        base_page.isPinned = False
+        return record
+
+    '''
+        Returns record from path
+    '''
+    def get_records(self, path, value, column, query_columns):
+        records = []
+        base_page = self.get_from_disk(path=path)
+        base_page.isPinned = True
+        self.buffer_pool.addConceptualPage(base_page)
+        indirection = base_page.pages[0]
+        # for each record in base page
+        for rec_ind in range(base_page.num_records):
+            rec_RID = base_page.pages[1].retrieve(rec_ind)
+            key = base_page.pages[6].retrieve(rec_ind)
+            if rec_RID in indirection.keys():
+                record = self.get_updated_values(key, query_columns, base_page)
+                if record.columns[column] == value:
+                    records.append(record)
+            else:
+                record = self.get_base_values(key, query_columns, base_page)
+                if record.columns[column] == value:
+                    records.append(record)
+        base_page.isPinned = False
+        return records
+
+    ### End of Select Helpers ###
 
     """
     Update a record with specified key and columns
@@ -381,7 +467,7 @@ class Query:
         - returns sum
     '''
     def sum(self, start_range, end_range, aggregate_column_index):
-        file_paths = self.get_file_paths() # gets all base page paths
+        file_paths = self.get_base_paths() # gets all base page paths
         sum = 0
         start_range, end_range = self.start_is_less(start_range, end_range)
         # Check through every base page & their records
@@ -407,17 +493,21 @@ class Query:
 
     '''
         Gets all base page paths in disk and buffer_pool
+            - Uses regex to match with all base pages when searching in disk/buf
         returns paths
     '''
-    def get_file_paths(self):
+    def get_base_paths(self):
         regex = re.compile("./template/ECS165/%s/PR[0-9]+/BP[0-9]+"%self.table.name)
         rootdir = './template/ECS165/'
         file_paths = []
+        # Check in disk
         for subdir, dirs, files in os.walk(rootdir):
             for file in files:
                 path = os.path.join(subdir, file) # path to file
+                # if it matches with some value within the current path, append
                 if not re.match(regex, path) == None:
                     file_paths.append(path)
+        # Check in buffer_pool
         for path in self.buffer_pool.buffer_keys.keys():
             if not re.match(regex, path) == None:
                 file_paths.append(path)
@@ -625,8 +715,12 @@ class Query:
 
         return False
 
+    '''
+        Returns record index in base page based on key if exists, else -1
+    '''
     def get_rec_ind(self, cpage, key):
         for rec_num in range(cpage.num_records):
             rec_key = cpage.pages[6].retrieve(rec_num)
             if rec_key == key:
                 return rec_num
+        return -1

@@ -26,7 +26,7 @@ class Database():
     """
     def create_table(self, name, num_columns, key):
         table = Table(name, num_columns, key)
-        table.buffer_pool = BufferPool(name)
+        table.buffer_pool = BufferPool(name, num_columns)
         self.tables.append(table)
         "NEW - makes a table directory with name in ECS 165"
         os.mkdir(os.path.join(self.path+'/', name))
