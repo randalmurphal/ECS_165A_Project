@@ -22,7 +22,7 @@ class BufferPool():
 
     def __init__(self, table_name, num_columns):
         self.meta_data        = MetaData() # holds table meta data
-        self.max_capacity     = 16         # max number of cpages in buffer
+        self.max_capacity     = 128        # max number of cpages in buffer
         self.conceptual_pages = []         # cpage objects
         self.buffer_keys      = {}         # page_path: page_object
         self.table_name       = table_name # name of table

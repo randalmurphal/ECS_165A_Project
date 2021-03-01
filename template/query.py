@@ -12,7 +12,7 @@ import time, math, pickle, re, os
 from datetime import datetime
 import copy
 MAX_INT = int(math.pow(2, 63) - 1)
-MAX_PAGE_RANGE_SIZE = 8192
+MAX_PAGE_RANGE_SIZE = 8192 #65536
 MAX_BASE_PAGE_SIZE  = 512
 MAX_PHYS_PAGE_SIZE  = 512
 
