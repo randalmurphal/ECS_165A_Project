@@ -129,13 +129,14 @@ class BufferPool():
     def get_tail_pages(self,base_page):
         tail_page_paths = []
         tail_pages = []
-        indirection        = base_page.pages[0]
-        base_rec_ind       = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
-        time_stamp_column  = base_page.pages[2]
-        base_schema_column = base_page.pages[3]
-        tps_column         = base_page.pages[4]
-        base_RID_column    = base_page.pages[5]
-        key_column         = base_page.pages[6]
+        indirection         = base_page.pages[0]
+        base_rec_ind        = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
+        base_rec_RID_column = base_page.pages[1]
+        time_stamp_column   = base_page.pages[2]
+        base_schema_column  = base_page.pages[3]
+        tps_column          = base_page.pages[4]
+        baseRID_column      = base_page.pages[5]
+        key_column          = base_page.pages[6]
         # 1.Go thru the indirection and get all tail_paths
         # Add all paths to the tail page that aren't duplicates
         # record = baseRID:(path,tail_RID)
@@ -148,25 +149,38 @@ class BufferPool():
             with open(path,"rb") as db_file:
                 tail_page_obj = pickle.load(db_file)
                 tail_pages.append(tail_page_obj)
-        return tail_pages, base_RID_column
+        return tail_pages, base_rec_RID_column
 
     def create_base_copy(self,base_page,tail_pages):
-        indirection        = base_page.pages[0]
-        tail_page_objs, base_RID_column = tail_pages
-        tail_page_values = []
         new_base_page = copy.deepcopy(base_page)
-        for i, key in enumerate(base_RID_column):
-            for j, tail_page in tail_page_objs:
-                count = 0
-                for x in tail_page.pages[0]:
-                    if x == key:
-                        for k in range(len(base_page.pages[3][0])):
-                            new_value = tail_page.pages[k+6].retrieve(count)
-                            tail_page.pages[k+6].overWrite(new_base_page.pages[k+6].retrieve(i),new_value)
-                        # Here we want the values
-                    else:
-                        count += 1
+        indirection        = new_base_page.pages[0]
+        tail_page_objs, base_rec_RID_column = tail_pages
+        tail_page_values = []
+        new_base_page.pages[1]
+        baseRID:(tail_path,tail_RID)
+        # go through each
+        for base_rec_num in range(new_base_page.num_records):
+            base_rec_RID = new_base_page.pages[1].retrieve(base_rec_num)
+            # if not in indirection, we don't need to check for updates because it hasn't been updated
+            if not base_rec_RID in indirection.keys():
+                continue
+            tail_page_path, tail_rec_ind = indirection[base_rec_RID]
+            # iterate through list of tail pages
+            for tail_page in tail_page_objs:
+                # check if the tail page were looking at in the list of tail pages is the one containing the latest tail record for this base record
+                if tail_page_path == tail_page.path:
+                    # go through schema encoding of base record
+                    for k in range(len(base_page.pages[3][base_rec_num])):
+                        # if schema encoding 0: keep original base record value for that column
+                        if base_page.pages[3][k] == 0:
+                            pass
+                        # if schema encoding 1: grab new value from tail page and overwrite for that column
+                        else:
+                            new_value = tail_page.pages[k+6].retrieve(tail_rec_ind)
+                            new_base_page.pages[k+6].overWrite(new_value, base_rec_num)
+
         return new_base_page
+
     def set_new_path(self,base_page,merge_num):
         # Path = ./ECS165/Grades/PR#/BP#_M#
         new_path = str(base_page.path) + '_M' + str(base_page.merge_num)
@@ -184,19 +198,23 @@ class BufferPool():
         # Abstract out the numbers from the file_string
         # Path = ./ECS165/Grades/PR#/BP#_M#
         #path.split('/') = ['.', 'ECS165', 'Grades', 'PR1', 'BP2_M4']
-        path.split('/')[3][2:]
-        pr_num = 0
-        bp_num = 0
-        m_num = 0
-        rec_num = 0
-        new_loc = (pr_num,bp_num,m_num,rec_num)
-        count = 0
-        while count != 512:
-            for key_in_dict in self.key_dict:
-                if key_in_dict == base_page.pages[6].retrieve(count):
-                    # set the key to new_path
-                    self.key_dict.set(key_in_dict, new_loc)
-                    count += 1
+        path = base_page.path
+        pr_num = path.split('/')[3][2:]
+        bp_num = (((path.split('/')[4]).split('_'))[0])[2:]
+        m_num = (((path.split('/')[4]).split('_'))[1])[1:]
+        #rec_num = 0
+
+        for record_num in range(base_page.num_records):
+            record_key = base_page.pages[6].retrieve(record_num)
+            new_loc = (pr_num,bp_num,m_num,record_num)
+            self.meta_data.key_dict[record_key] = new_loc
+
+        # while count != 512:
+        #     for key_in_dict in self.key_dict:
+        #         if key_in_dict == base_page.pages[6].retrieve(count):
+        #             # set the key to new_path
+        #             self.key_dict.set(key_in_dict, new_loc)
+        #             count += 1
 
     '''
         - No limit to memory for merge

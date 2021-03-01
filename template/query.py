@@ -24,9 +24,9 @@ class Query:
     """
 
     def __init__(self, table):
-        self.table       = table
-        self.buffer_pool = table.buffer_pool
-        self.merge_count = 0
+        self.table           = table
+        self.buffer_pool     = table.buffer_pool
+        self.merge_count     = 0
         self.merge_frequency = 100
 
     """
@@ -106,7 +106,7 @@ class Query:
         path = './template/ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
         cpage, is_in_buffer = self.in_buffer(path)
         if not is_in_buffer:
-            cpage = self.get_from_disk(key, path)
+            cpage = self.get_from_disk(path)
             self.buffer_pool.addConceptualPage(cpage)
         self.buffer_pool.populateConceptualPage(columns, cpage)
         return cpage
