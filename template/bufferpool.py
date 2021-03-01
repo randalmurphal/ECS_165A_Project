@@ -179,13 +179,7 @@ class BufferPool():
         new base page in merge
     '''
     def change_dict_vals(self, base_page, new_base_path):
-        # Take the dictionary, and iterate through it for KEYS
-        # If the key is the same as the key in the base_page, then replace the key's value with the new one
-        # Redefine keys to map to keys:new_base_path
-        # Location Tuple(PR, BP, M, Record_Num)]
         # Abstract out the numbers from the file_string
-        # Path = ./ECS165/Grades/PR#/BP#_M#
-        #path.split('/') = ['.', 'ECS165', 'Grades', 'PR1', 'BP2_M4']
         path = base_page.path
         pr_num = path.split('/')[4][2:]
         bp_str = path.split('/')[5].split('_')
@@ -196,13 +190,6 @@ class BufferPool():
             record_key = base_page.pages[6].retrieve(rec_ind)
             new_loc = (pr_num, bp_num, m_num, rec_ind)
             self.meta_data.key_dict[record_key] = new_loc
-
-        # while count != 512:
-        #     for key_in_dict in self.key_dict:
-        #         if key_in_dict == base_page.pages[6].retrieve(count):
-        #             # set the key to new_path
-        #             self.key_dict.set(key_in_dict, new_loc)
-        #             count += 1
 
     '''
         1. Get a base_page from the set of possible merges
