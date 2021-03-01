@@ -26,6 +26,8 @@ class Query:
     def __init__(self, table):
         self.table       = table
         self.buffer_pool = table.buffer_pool
+        self.merge_count = 0
+        self.merge_frequency = 100
 
     """
         Read a record with specified RID
@@ -133,44 +135,14 @@ class Query:
         Inserts new key:location to key dict map and increment base_rid count
     '''
     def insert_buffer_meta(self, key):
-        self.buffer_pool.meta_data.key_dict[key] = self.get_loc()
+        while self.buffer_pool.meta_data.key_dict_locked: pass
+        self.buffer_pool.meta_data.key_dict_locked = True
+        self.buffer_pool.meta_data.key_dict[key]   = self.get_loc()
+        self.buffer_pool.meta_data.key_dict_locked = False
         self.buffer_pool.meta_data.baseRID_count += 1
 
     ### ******* End of Insert Helpers ******* ###
-# else:
-#     # for key in self.buffer_pool.meta_data.key_dict.keys():
-#
-#
-#     # loop through every goddamn base page in the whole damn database
-#     # for key in self.bufferpool.meta_data.key_dict.keys()
-#     # cpage=self.get_from_disk(key=key)
-#     rec_index_list=[]
-#     records_return_list=[]
-#     rec_index=0
-#     for rec_num in range(cpage.num_records):
-#         rec_key = cpage.pages[6+column].retrieve(rec_num)
-#         if rec_key == key:
-#             rec_index = rec_num
-#             rec_index_list.append(rec_index)
-#     for rec_index in rec_index_list:
-#         rec_RID = cpage.pages[1].retrieve(rec_index)
-#         updated = False
-#         indirection = cpage.pages[0]
-#         if rec_RID in indirection.keys():
-#             # DO SHIT WITH UPDATES SHIT HERE
-#             tail_RID = indirection[rec_RID]
-#             tail_pg  = self.getTailPage(tail_RID)
-#             # Get values at schema encoded columns
-#         else:
-#             # if base record has not been updated: return base record
-#             values_to_return = []
-#             # checks query columns to see which columns we want to return. If 0: return None, else: return value
-#             for i in range(len(query_columns)):
-#                 if query_columns[i] == 0:
-#                     values_to_return.append(None)
-#                 else:
-#                     values_to_return.append(cpage.pages[i+6].retrieve(rec_index))
-#                     records_return_list.append(Record(rec_RID, value, values_to_return))
+
     """
     Read a record with specified key
     :param key: the key value to select records based on
@@ -183,12 +155,11 @@ class Query:
     def select(self, value, column, query_columns):
         records = []
         # if key column
-        if column != 0:
+        if column == 0:
             # get base page (checks if in buffer or not)
             key   = value
             cpage = self.get_from_disk(key=key)
             cpage.isPinned = True
-            self.buffer_pool.addConceptualPage(cpage)
             # Get index of record based on key
             rec_index = self.get_rec_ind(cpage, key)
             rec_RID   = cpage.pages[1].retrieve(rec_index)
@@ -271,7 +242,6 @@ class Query:
     '''
     def get_from_index(self, rec_ind, path, query_columns):
         base_page = self.get_from_disk(path=path)
-        self.buffer_pool.addConceptualPage(base_page)
         base_page.isPinned = True
         base_RID     = base_page.pages[1].retrieve(rec_ind)
         key          = base_page.pages[6].retrieve(rec_ind)
@@ -290,7 +260,6 @@ class Query:
         records = []
         base_page = self.get_from_disk(path=path)
         base_page.isPinned = True
-        self.buffer_pool.addConceptualPage(base_page)
         indirection = base_page.pages[0]
         # for each record in base page
         for rec_ind in range(base_page.num_records):
@@ -315,19 +284,23 @@ class Query:
     Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
-        # """---New---"""
-        # columns_to_update = self.get_query_cols(key, *columns)
-        my_base_page = self.get_from_disk(key=key)
-        base_page, is_in_buffer = self.in_buffer(my_base_page.path)
-        if not is_in_buffer:
-            self.buffer_pool.addConceptualPage(my_base_page)
-        else:
-            my_base_page = base_page
-        my_base_page.isPinned = True
-        tail_page = self.get_tail_page(my_base_page, key, False, *columns)
-        self.update_tail_page(my_base_page, tail_page, key, *columns)
-        my_base_page.isPinned = False
-        my_base_page.dirty    = True
+        # get base page & pin -- adds to bufferpool
+        base_page = self.get_from_disk(key=key)
+        base_page.isPinned = True
+        # Get tail page -- adds to bufferpool
+        tail_page = self.get_tail_page(base_page, key, False, *columns)
+        self.update_tail_page(base_page, tail_page, key, *columns)
+        base_page.isPinned = False
+        base_page.dirty    = True
+        if base_page.full():
+            if tail_page.path not in self.buffer_pool.merge_tails:
+                self.buffer_pool.merge_tails.append(tail_page.path)
+            if base_page.path not in self.buffer_pool.merge_bases:
+                self.buffer_pool.merge_bases.append(base_page.path)
+        self.merge_count += 1
+        if self.merge_count == self.merge_frequency:
+            merge_thread = threading.Thread(target=self.buffer_pool.merge())
+            merge_thread.start()
         return True
 
     ### ******* Update Helpers ******* ###
@@ -475,9 +448,6 @@ class Query:
             # get base page from path
             cpage = self.get_from_disk(path=path)
             cpage.isPinned = True
-            _, is_in_buffer = self.in_buffer(path) #checks if its in bufferpool conceptualPage list
-            if not is_in_buffer:
-                self.buffer_pool.addConceptualPage(cpage) #add to bufferpool
             # check indirection to see if tail page is in indirection
             for i in range(cpage.num_records):
                 curr_val         = cpage.pages[aggregate_column_index+6].retrieve(i)
@@ -556,9 +526,6 @@ class Query:
         if updated:
             tail_path, tail_rec_ind = indirection[rec_RID]
             tail_page = self.get_from_disk(path=tail_path)
-            tail_page.isPinned = True
-            self.buffer_pool.addConceptualPage(tail_page)
-            tail_page.isPinned = False
             return tail_page.pages[col_ind+6].retrieve(tail_rec_ind)
         else:
             return cpage.pages[col_ind+6].retrieve(rec_num)
@@ -607,8 +574,6 @@ class Query:
                     # prev = false for new tail page full & not looking for prev tail values
                     if tail_page.full() and prev == False:
                         tail_page = self.new_tail_page(pr_num, *columns)
-                    else:
-                        self.buffer_pool.addConceptualPage(tail_page)
                 else:
                     tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                     self.add_meta(tail_page)
@@ -638,6 +603,7 @@ class Query:
         if not is_in_buffer:
             with open(path, 'rb') as db_file:
                 cpage = pickle.load(db_file)
+            self.buffer_pool.addConceptualPage(cpage)
         return cpage
 
     '''

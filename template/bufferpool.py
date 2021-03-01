@@ -13,12 +13,13 @@ MAX_INT = int(math.pow(2, 63) - 1)
 class MetaData():
     # data = some tuple of info we can extract below
     def __init__(self):
-        self.currpr        = -1 # current page range (-1 bc creation of PR on first insert)
-        self.currbp        = 0  # current base page
-        self.record_num    = 0  # number of total records
-        self.baseRID_count = 0  # number of base records
-        self.tailRID_count = 0  # number of tail records
-        self.key_dict      = {} # key:(pr#, bp#, page#, rec_ind)
+        self.currpr          = -1    # current page range (-1 bc creation of PR on first insert)
+        self.currbp          = 0     # current base page
+        self.record_num      = 0     # number of total records
+        self.baseRID_count   = 0     # number of base records
+        self.tailRID_count   = 0     # number of tail records
+        self.key_dict        = {}    # key:(pr#, bp#, merge_number, rec_ind)
+        self.key_dict_locked = False # When merging lock to prevent insert changes
 
 class BufferPool():
 
@@ -28,7 +29,6 @@ class BufferPool():
         self.conceptual_pages = []         # cpage objects
         self.buffer_keys      = {}         # page_path: page_object
         self.table_name       = table_name # name of table
-        # self.index_arr        = [None]*num_columns
         self.merge_bases      = []         # holds bp paths ready to merge
         self.merge_tails      = []         # holds tail pages for merge bases
         self.first            = True       # for manual check to make first PR
@@ -125,6 +125,7 @@ class BufferPool():
                 base_pages.append(base_page)
 
         return base_pages
+
     def get_tail_pages(self,base_page):
         tail_page_paths = []
         tail_pages = []
@@ -135,7 +136,6 @@ class BufferPool():
         tps_column         = base_page.pages[4]
         base_RID_column    = base_page.pages[5]
         key_column         = base_page.pages[6]
-
         # 1.Go thru the indirection and get all tail_paths
         # Add all paths to the tail page that aren't duplicates
         # record = baseRID:(path,tail_RID)
@@ -150,12 +150,11 @@ class BufferPool():
                 tail_pages.append(tail_page_obj)
         return tail_pages, base_RID_column
 
-    def create_base_copy(self,base_page):
-        # Take a
+    def create_base_copy(self,base_page,tail_pages):
         indirection        = base_page.pages[0]
-        tail_page_objs, base_RID_column = get_tail_pages(base_page)
+        tail_page_objs, base_RID_column = tail_pages
         tail_page_values = []
-        new_base_page = copy.copy(base_page)
+        new_base_page = copy.deepcopy(base_page)
         for i, key in enumerate(base_RID_column):
             for j, tail_page in tail_page_objs:
                 count = 0
@@ -168,17 +167,63 @@ class BufferPool():
                     else:
                         count += 1
         return new_base_page
-    def change_dict_vals(self,dictionary):
-        pass
+    def set_new_path(self,base_page,merge_num):
+        # Path = ./ECS165/Grades/PR#/BP#_M#
+        new_path = str(base_page.path) + '_M' + str(base_page.merge_num)
+        base_page.path = new_path
+        base_page.merge_num += 1
+        with open(new_path,'wb') as db_file:
+            pickle.dump(base_page, db_file)
+        return new_path
 
+    def change_dict_vals(self,base_page, new_base_path):
+        # Take the dictionary, and iterate through it for KEYS
+        # If the key is the same as the key in the base_page, then replace the key's value with the new one
+        # Redefine keys to map to keys:new_base_path
+        # Location Tuple(PR, BP, M, Record_Num)]
+        # Abstract out the numbers from the file_string
+        # Path = ./ECS165/Grades/PR#/BP#_M#
+        #path.split('/') = ['.', 'ECS165', 'Grades', 'PR1', 'BP2_M4']
+        path.split('/')[3][2:]
+        pr_num = 0
+        bp_num = 0
+        m_num = 0
+        rec_num = 0
+        new_loc = (pr_num,bp_num,m_num,rec_num)
+        count = 0
+        while count != 512:
+            for key_in_dict in self.key_dict:
+                if key_in_dict == base_page.pages[6].retrieve(count):
+                    # set the key to new_path
+                    self.key_dict.set(key_in_dict, new_loc)
+                    count += 1
+
+    '''
+        - No limit to memory for merge
+        - Get Base pages that are ready for merge
+            - Get corresponding tail pages
+        - Create copy of current base page
+        - Merge Tail Pages with base page copy
+        - Create new base page path
+    '''
     def merge(self):
+        # 1. Get a base_page from the set of possible merges
+        # 2. Get the corresponding tail_pages
+        # 3. Create a new copy of the base_page
+        # 4. Merge the tail_pages with the new base_page
+        # 5. Create a new file called # Path = ./ECS165/Grades/PR#/BP#_M#
+        # 6. Go through the key_dict and find all the Keys that are equalivent to the keys in the new_base_page and replace path
         possible_merges = []
         to_be_merged = []
         base_pages = self.get_base_pages()
-        tail_pages = self.get_tail_pages(base_pages)
-        for base_page in base_pages:
-            tail_pages = self.get_tail_pages(base_pages)
-            create_base_copy(base_page)
+        # tail_pages = self.get_tail_pages(base_pages)
+        for base_page in to_be_merged:
+            merge_num = base_page.merge_num
+            base_page.merge_num += 1
+            tail_pages = self.get_tail_pages(base_page)
+            new_base = self.create_base_copy(base_page, tail_pages)
+            new_base_path = self.set_new_path(new_base, merge_num)
+            self.change_dict_vals(new_base, new_base_path)
         # copy_of_base = self.create_copies()
         # for base_page in base_pages:
         #     for base_record_num in range(512):                                    #should this be 511? starts from 0
@@ -238,10 +283,10 @@ class BufferPool():
         3. Consolide (actually do the fucking merge)
         4. Update the key_dir in bufferpool metadata to ensure
         '''
-        merge_base_pages, merge_tail_pages = self.id_merge_pages()
-
-        merge_RID_dir = copy.copy(self.buffer_pool.meta_data.key_dir)
-        merge_RID_dict = {}
+        # merge_base_pages, merge_tail_pages = self.id_merge_pages()
+        #
+        # merge_RID_dir = copy.copy(self.buffer_pool.meta_data.key_dir)
+        # merge_RID_dict = {}
         # Identify base pages and tail pages we will be using during merge, add them to the appropriate arrays
 
         # 2. Make a copy of those base_pages
@@ -251,8 +296,8 @@ class BufferPool():
         # 5. The base_page_copy's values then becomes the tail_pages value(iterate backwards)
         # 1. Get the base_pages you want to merge (Based off of something)
 
-        self.merge_paths = []
-        self.corresponding_tail_pages = [(BP, tail_page_object)]
+        # self.merge_paths = []
+        # self.corresponding_tail_pages = [(BP, tail_page_object)]
         # Create a new thread for merge
         # # update at x count
         # merge_t = threading.Thread(target=merge)

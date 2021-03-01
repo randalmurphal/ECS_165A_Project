@@ -19,7 +19,7 @@ class ConceptualPage:
         self.path        = ''
         self.isPinned    = False
         self.dirty       = True
-        # self.key_dict    = {}
+        self.merge_num   = 1
         self.add_columns(columns)
 
     def update_num_records(self):
