@@ -82,7 +82,7 @@ class BufferPool():
                 i = 0
             cpage = self.conceptual_pages[i]
         cpage = self.conceptual_pages.pop(i) # remove and store unpinned cpage
-        cpage.isPinned = False
+        cpage.isPinned -= 1
         self.remove_key(cpage)
         # if changes to write, page is dirty
         if cpage.dirty:

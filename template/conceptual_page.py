@@ -17,7 +17,7 @@ class ConceptualPage:
         self.pages       = []
         self.num_records = 0
         self.path        = ''
-        self.isPinned    = False
+        self.isPinned    = 0
         self.dirty       = True
         self.merge_num   = 1
         self.add_columns(columns)

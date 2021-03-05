@@ -7,7 +7,7 @@ class TransactionWorker:
     # Creates a transaction worker object.
     """
     def __init__(self, transactions = []):
-        self.stats = []
+        self.stats  = []
         self.transactions = transactions
         self.result = 0
         pass
@@ -27,4 +27,3 @@ class TransactionWorker:
             self.stats.append(transaction.run())
         # stores the number of transactions that committed
         self.result = len(list(filter(lambda x: x, self.stats)))
-

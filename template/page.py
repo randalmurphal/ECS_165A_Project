@@ -10,6 +10,7 @@ class Page:
 		self.data = bytearray(4096)
 		# NEW, gonna need a self.path that tells us where this page is in disk
 		self.path = "default"
+		self.locked = False
 
 	def full(self):
 		if self.num_records >= 512:
@@ -18,14 +19,18 @@ class Page:
 		return False
 
 	def write(self, value):
-		offset = self.num_records * 8
+		if self.locked:
+			return False
+		self.locked = True
+		offset      = self.num_records * 8
 		for i in int_to_bytes(value, 8):
 			try:
 				self.data[offset] = i
-				offset = offset + 1
+				offset            = offset + 1
 			except IndexError:
 				raise("IndexError:", offset, self.num_records)
 		self.num_records += 1
+		self.locked       = False
 		return True
 
         # # Write into the page the value
@@ -37,10 +42,8 @@ class Page:
 	def overWrite(self, value, record_num):
 		offset = record_num * 8
 		for i in int_to_bytes(value, 8):
-
 			self.data[offset] = i
 			offset = offset + 1
-
 		return True
 
 	def setPath(self,path):
