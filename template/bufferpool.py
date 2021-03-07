@@ -1,10 +1,9 @@
 from template.config import *
 from template.page import Page
 from template.conceptual_page import ConceptualPage
+from template.query import MAX_INT
 import math, threading, os, pickle, copy
 import numpy as np
-
-MAX_INT = int(math.pow(2, 63) - 1)
 
 #we probably want meta data to be stored in the files
 class MetaData():
@@ -29,6 +28,7 @@ class BufferPool():
         self.merge_bases      = []         # holds bp paths ready to merge
         self.merge_tails      = []         # holds tail pages for merge bases
         self.first            = True       # for manual check to make first PR
+        self.trans_recs       = {}         # holds [(location, path, "insert/update")] changed in each transaction
 
     '''
         Creates and adds new cpage to buffer_pool
@@ -42,7 +42,9 @@ class BufferPool():
         cpage.path = path
         # dont want to add values to tail
         if not is_tail:
-            self.populateConceptualPage(columns, cpage)
+            success = self.populateConceptualPage(columns, cpage)
+            if not success:
+                return None
         self.addConceptualPage(cpage)
         return cpage
 
@@ -64,7 +66,9 @@ class BufferPool():
         conceptualPage.num_records += 1
         offset = 6 # number of meta columns
         for i, col in enumerate(columns):
-            conceptualPage.pages[i + offset].write(columns[i])
+            success = conceptualPage.pages[i + offset].write(columns[i])
+            if not success:
+                return False
         conceptualPage.pages[3].append(np.zeros(len(columns)))
         return True
 
@@ -76,7 +80,8 @@ class BufferPool():
     def evict(self):   #evict a physical page from bufferpool (LRU)
         i = 0
         cpage = self.conceptual_pages[i]
-        while cpage.isPinned:
+        # Loop through until finds an unpinned page
+        while cpage.isPinned > 0:
             i += 1
             if i == len(self.conceptual_pages):
                 i = 0
@@ -90,6 +95,12 @@ class BufferPool():
             cpage.dirty = False
             with open(path, 'wb') as db_file:
                 pickle.dump(cpage, db_file)
+
+    # '''
+    #     Removes a page from bufferpool when aborting
+    # '''
+    # def remove(self):
+
 
     '''
         Close: evicts all cpages from buffer_pool

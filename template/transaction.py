@@ -1,5 +1,6 @@
-from lstore.table import Table, Record
-from lstore.index import Index
+from template.table import Table, Record
+from template.index import Index
+import threading
 
 class Transaction:
 
@@ -7,8 +8,9 @@ class Transaction:
     # Creates a transaction object.
     """
     def __init__(self):
-        self.queries = []
-        pass
+        self.queries     = []
+        self.query_pages = []
+        self.logger      = Logger()
 
     """
     # Adds the given query to this transaction
@@ -18,23 +20,36 @@ class Transaction:
     # t.add_query(q.update, 0, *[None, 1, None, 2, None])
     """
     def add_query(self, query, *args):
-        self.queries.append((query, args))
+        self.queries.append((query, *args))
 
     # If you choose to implement this differently this method must still return True if transaction commits or False on abort
     def run(self):
+        trans_num = threading.get_ident()
         # Create a new thread here?
-        for query, args in self.queries:
+        for query, *args in self.queries:
             result = query(*args)
+            # Log query success
+            query_type = query.__name__
+            if query_type == "sum":
+                log_msg = "%i, %s, %i, %i"%(trans_num, query_type, args[0], args[1])
+            elif query_type == "select":
+                log_msg = "%i, %s, %i, %i"%(trans_num, query_type, args[0], args[1])
+            else:
+                log_msg = "%i, %s, %i"%(trans_num, query_type, args[0])
+            self.logger.write_log(log_msg)
             # If the query has failed the transaction should abort
             if result == False:
-                #note where we failed
+                # note where we failed
                 return self.abort()
 
         return self.commit()
 
     def abort(self):
-        # TODO: do roll-back and any other necessary operations
-        # loop through the queries we have done and undo those ones only
+        trans_num  = threading.get_ident()
+        trans_logs = self.logger.get_log(trans_num)
+
+
+
         return False
 
     def commit(self):
