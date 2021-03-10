@@ -17,8 +17,8 @@ MAX_PAGE_RANGE_SIZE = 8192
 MAX_BASE_PAGE_SIZE  = 512
 MAX_PHYS_PAGE_SIZE  = 512
 buffer_lock   = threading.Lock()
-key_dict_lock = threading.Lock()
-#ISSUES : 
+insert_lock   = threading.Lock()
+#ISSUES :
 #CURRENT
 #seems to be a problem whenever evict() is called in addconceptual
 #why is it inserting to baserid = 7k+, not using threads properly to insert, insert works fine in other tester
@@ -69,11 +69,18 @@ class Query:
     """
     # Tuple of columns(Key,Value)
     def insert(self, *columns):
+        # Check if the thread_num && key are in lock_manager
+        lock_manager = self.table.lock_manager.lock_recs
+        trans_num = threading.get_ident()
+        key = columns[0]
+        if key in lock_manager and trans_num != lock_manager[key][2]:
+            # Insert is a write operation, we abort on read/write
+            return False
+
         print("INSERTING ", *columns)
         print("Base RID Count: ", self.buffer_pool.meta_data.baseRID_count)
-        key = columns[0]
         new_page_range, new_base_page = self.get_new_bools()
-        self.buffer_pool.meta_data.baseRID_count += 1
+
         # if we need to create a new page range
         if new_page_range:
             #print("creating new PR because RID count is: ", self.buffer_pool.meta_data.baseRID_count )
@@ -94,6 +101,7 @@ class Query:
         self.insert_buffer_meta(key)
         cpage.dirty     = True
         cpage.isPinned -= 1
+        self.buffer_pool.meta_data.baseRID_count += 1
         #print("inserted: ", columns)
         return True
 
@@ -118,7 +126,7 @@ class Query:
     '''
     def add_new_bp(self, *columns):
         self.buffer_pool.meta_data.currbp += 1
-        path  = './template/ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
+        path  = './template/%s/'%(self.table.path) + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
         buffer_lock.acquire()
         cpage = self.buffer_pool.createConceptualPage(path, False, *columns)
         cpage.isPinned += 1
@@ -129,7 +137,7 @@ class Query:
         Insert record into bp that already exists
     '''
     def insert_to_bp(self, *columns):
-        path = './template/ECS165/' + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
+        path = './template/%s/'%(self.table.path) + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
         buffer_lock.acquire()
         cpage, is_in_buffer = self.in_buffer(path)
         if not is_in_buffer:
@@ -399,7 +407,7 @@ class Query:
             # if full after creating snapshot
             if tail_page.full():
                 tail_page.isPinned -= 1
-                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+                tail_path = './template/%s/'%(self.table.path) + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
                 buffer_lock.acquire()
                 tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                 tail_page.isPinned += 1
@@ -410,7 +418,7 @@ class Query:
             if tail_page.full():
                 tail_page.isPinned -= 1
                 pr_num    = base_page.path.split("/")[3][2:]
-                tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+                tail_path = './template/%s/'%(self.table.path) + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
                 buffer_lock.acquire()
                 tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                 tail_page.isPinned += 1
@@ -563,8 +571,8 @@ class Query:
         returns paths
     '''
     def get_base_paths(self):
-        regex = re.compile("./template/ECS165/%s/PR[0-9]+/BP[0-9]+"%self.table.name)
-        rootdir = './template/ECS165/'
+        regex = re.compile("./template/%s/%s/PR[0-9]+/BP[0-9]+"%(self.table.path,self.table.name)
+        rootdir = './template/%s/'%self.table.path
         file_paths = []
         seen = []
         # Check in disk
@@ -666,7 +674,7 @@ class Query:
         if base_rec_RID in indirection.keys():
             tail_path, tail_rec_ind = indirection[base_rec_RID]
         else:
-            tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+            tail_path = './template/%s/'%(self.table.path) + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
         # if tail not in buffer, get from file and add to buffer_pool. Else just grab from buffer_pool
         # lock object
         buffer_lock.acquire()
@@ -704,7 +712,7 @@ class Query:
             if key == None:
                 raise TypeError("Key value is None: get_from_disk()")
             location = self.buffer_pool.meta_data.key_dict[key]
-            path     = './template/ECS165/'+self.table.name+'/PR'+str(location[0])+'/BP'+str(location[1])
+            path     = './template/%s/'%(self.table.path) +self.table.name+'/PR'+str(location[0])+'/BP'+str(location[1])
         # if not in buffer, grab from disk
         cpage, is_in_buffer = self.in_buffer(path)
         if not is_in_buffer:
@@ -717,7 +725,7 @@ class Query:
         Creates new tail page from meta_data path & add to buffer_pool
     '''
     def new_tail_page(self, pr_num):
-        tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
+        tail_path = './template/%s/'%(self.table.path)  + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
         tail_page, is_in_buffer = self.in_buffer(tail_path)
         if not is_in_buffer:
             tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *[None]*self.table.num_columns)
@@ -729,7 +737,7 @@ class Query:
         Returns path to page range directory
     '''
     def create_pr_dir(self):
-        pr_path = './template/ECS165/'+self.table.name+ "/PR"+str(self.buffer_pool.meta_data.currpr)
+        pr_path = './template/%s/'%(self.table.path) +self.table.name+ "/PR"+str(self.buffer_pool.meta_data.currpr)
         os.mkdir(pr_path)  #insert new PR and BP into disk
         return pr_path
 
@@ -749,7 +757,7 @@ class Query:
     '''
     def add_meta(self, cpage):
         # Get current time value
-        
+
         current_time = datetime.now().time()
         time_val     = ""
         hour         = 0
@@ -761,12 +769,14 @@ class Query:
                 hour = int(time_val) * 60
                 time_val = ""
         time_val = int(time_val) + hour
+        insert_lock.acquire()
         values = [self.buffer_pool.meta_data.baseRID_count, time_val]
         cpage.pages[1].write(values[0])  # Base_RID col
         cpage.pages[2].write(values[1])  # Timestamp col
         cpage.pages[3].append(np.zeros(len(cpage.pages) - 6)) # Schema
         cpage.pages[4].write(0) # Other Base_RID
         cpage.pages[5].write(0) # TPS col
+        insert_lock.release()
 
     '''
         Returns query columns for which columns need to be updated
@@ -798,205 +808,3 @@ class Query:
             if rec_key == key:
                 return rec_num
         return -1
-
-    '''
-        Parses through logs and returns lines of select or update for
-        this aborted transaction thread
-        returns: array of relevant lines in logs
-    '''
-    def get_logs(self):
-        logs = []
-        trans_num = threading.get_ident()
-        with open(self.logger.log_path, 'r') as log_file:
-            lines = log_file.readlines()
-            for line in lines:
-                split = line.split(',')
-                file_trans_num = split[0]
-                query_type     = split[1]
-                if file_trans_num == trans_num and (query_type == 'insert' or query_type == 'update'):
-                    logs.append(line)
-        return logs
-
-    '''
-        Before an abort, check bufferpool and revert changes before sending back
-        to the transaction abort (which checks through the disk for aborted changes)
-    '''
-    def abort_buffer(self):
-        logs = self.get_logs()
-        # append operations and then call function to perform undo
-        abort_insert_logs = []
-        abort_update_logs = []
-        for line in reversed(logs):
-            query_type = line.split(',')[1]
-            # 2 diff operations for insert and select
-            if query_type == "insert":
-                abort_insert_logs.append(line)
-            else:
-                abort_update_logs.append(line)
-        self.abort_inserts(abort_insert_logs)
-        self.abort_updates(abort_update_logs)
-
-    '''
-        Undoes inserts for transactions still in bufferpool:
-            - performs a delete on that record (schema=0's & has
-                some tail page in indirection)
-    '''
-    def abort_inserts(self, insert_logs):
-        for log in insert_logs:
-            key  = int(log.split(',')[2])
-            loc  = self.key_dict[key]
-            path = self.get_log_path(loc)
-            if path in self.buffer_pool.buffer_keys:
-                cpage = self.buffer_pool.buffer_keys[path]
-                '''
-                    Want to change isPinned=0 and dirty=False if all changes
-                    to this page are aborted
-                        - maybe have a map/arr on the page that holds each thread
-                            that has changed this page, if no other threads then change vals
-                '''
-                self.delete(key)
-
-    '''
-        Undoes updates for transactions still in bufferpool:
-        - Create new tail record
-        - Go through each tail record in indirection paths
-            - if tail record is from this transaction, dont add that value to new tail record
-            - else, add the values that were updated in this tail record to new tail record
-        - continue until either all columns of new tail record are filled, or indirection points to itself (end of the chain)
-        - point base record indirection to new tail record and new tail record to prev tail record
-
-    ************
-        TODO:
-        - When updating, update the schema for tail pages
-        - Add thread id to tail record in some way
-        - Need to make sure that it can abort if that page is being accessed by another thread (when retrieving record rid)
-    '''
-    def abort_updates(self, update_logs):
-        for log in update_logs:
-            key  = int(log.split(',')[2])
-            loc  = self.key_dict[key] # gets location tuple for record
-            path = self.get_log_path(loc)
-            rec_ind = loc[3]
-            if path in self.buffer_pool.buffer_keys:
-                cpage = self.buffer_pool.buffer_keys[path]
-                cpage.isPinned += 1
-                # Get the update values without this transaction's updates and add to indirection
-                self.add_abort_tail(loc, cpage)
-                cpage.isPinned -= 1
-
-    '''
-        Takes a location for query record
-        Returns the path of the page for the query
-    '''
-    def get_log_path(self, location):
-        pr_num  = location[0]
-        bp_num  = location[1]
-        ''' idk what to do about merged files, will think about it later '''
-        return './template/ECS165/'+self.table.table_name+'/PR'+str(pr_num)+'/BP'+str(bp_num)
-
-    '''
-        Gets a new tail page and adds to base indirection
-            - new tail rec indirection points to tail page in base rec indirection
-                (should be most prev update that is not in this transaction)
-    '''
-    def add_abort_tail(self, loc, cpage):
-        new_vals   = [None]*self.table.num_columns
-        new_schema = np.zeros(self.table.num_columns)
-        base_indir = cpage.pages[0]
-        curr_indir = cpage.pages[0]
-        rec_ind    = loc[3]
-        rec_RID    = cpage.pages[1].retrieve(rec_ind) # Check access (cant abort an abort)
-        prev_RID   = rec_RID
-        tail_RID   = -1
-        tail_page  = None
-        in_trans   = False
-        # Loop until it points to itself, so end of chain
-        while True:
-            # Get tail page in indirection
-            # Dont save tail when skipping over update in this transaction
-            if not in_trans:
-                prev_tail_page    = tail_page
-                prev_tail_rec_ind = tail_rec_ind
-
-            tail_path, tail_rec_ind = curr_indir[prev_RID]
-            buffer_lock.acquire()
-            tail_page, is_in_buffer = self.in_buffer(tail_path)
-            if not is_in_buffer:
-                tail_page = self.get_from_disk(path=tail_path)
-            tail_page.isPinned += 1
-            buffer_lock.release()
-            # Check to see if last tail rec was in transaction, if not then update previous indirection, else dont
-            if not in_trans:
-                prev_indir = curr_indir
-            curr_indir = tail_page.pages[0]
-            # If we reached the end of the updates for this record, loops onto itself -- here if last update is not in this transaction
-            if curr_indir[tail_RID] == prev_indir[prev_RID]:
-                break
-            # Workaround bc dont want to store prev rid in first loop
-            if tail_RID != -1:
-                prev_RID = tail_RID
-            tail_RID = tail_page.pages[1].retrieve(tail_rec_ind)
-            in_trans = self.is_in_transaction(tail_page, tail_rec_ind)
-            # if in this transaction, dont take updates & change pointers
-            if in_trans:
-                # if reached end of updates for this record & want to remove last update
-                temp_path, temp_rec_ind = curr_indir[tail_RID]
-                # if the same page as the indirection is pointing to
-                if temp_path == tail_page.path and temp_rec_ind == tail_rec_ind:
-                    # If prev_tail_page is None, then we know we are removing all updates.
-                    #   Set base page schema to 0's and remove indirection
-                    if prev_tail_page == None:
-                        del base_indir[rec_RID]
-                        base_schema = cpage.pages[3][rec_ind]
-                        base_schema = np.zeros(self.table.num_columns)
-                    else:
-                        # set prev indirection to point to itself
-                        prev_indir = (prev_tail_page.path, prev_tail_rec_ind)
-                    break # -- here if last update is in this transaction and needed to be removed
-                # skip over the current tail record in the path of updates (prev -> next vs prev -> curr -> next)
-                prev_indir[prev_RID] = curr_indir[tail_RID]
-            else:
-                values = self.get_updated_tail_cols(tail_page, tail_rec_ind)
-                # Only add the most updated values, so if already in new_vals at ind, dont set to older update
-                for ind, val in values:
-                    if new_vals[ind] == None:
-                        new_vals[ind]   = val
-                        # to update base schema after aborted updates
-                        new_schema[ind] = 1
-            tail_page.isPinned -= 1
-        # If we can't just add to current tail page, create new tail page
-        if tail_page.full():
-            tail_page.isPinned -= 1
-            pr_num    = loc[0]
-            buffer_lock.acquire()
-            tail_page = self.new_tail_page(pr_num) # adds to buffer
-            tail_page.isPinned += 1
-            buffer_lock.release()
-            tail_rec_ind = 0
-        else:
-            tail_rec_ind = tail_page.num_records
-        # Write new values to page
-        self.buffer_pool.populateConceptualPage(new_vals, tail_page)
-        # Set new tail indirection to most recent update before this
-        tail_indir = tail_page.pages[0]
-        tail_RID   = tail_page.pages[1].retrieve(tail_rec_ind)
-        tail_indir[tail_RID] = base_indir[recRID]
-        tail_page.isPinned -= 1
-        # Add new tail record to base rec indirection
-        base_indir[rec_RID] = (tail_page.path, tail_rec_ind)
-        # update base schema
-        cpage.pages[3][rec_ind] = new_schema
-
-    '''
-        Returns True if a tail record is in this transaction, else False
-    '''
-    def is_in_transaction(self, tail_page, tail_rec_ind):
-        # TODO: implement this
-        pass
-
-    '''
-        Returns the values updated in this tail record (from previous tail record)
-    '''
-    def get_updated_tail_cols(self, tail_page, tail_rec_ind):
-        # TODO: implement this
-        pass

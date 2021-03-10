@@ -2,6 +2,7 @@ from template.page import *
 from template.index import Index
 from time import time
 from template.bufferpool import BufferPool
+from template.lock_manager import LockManager
 # from page_range import PageRange
 
 # These are indexes
@@ -24,7 +25,7 @@ class Table:
     :param num_columns: int     #Number of Columns: all columns are integer
     :param key: int             #Index of table key in columns
     """
-    def __init__(self, name, num_columns, key):
+    def __init__(self, name, num_columns, key, path):
         self.currbp       = 0            # base page
         self.currpr       = 0            # page range
         self.name         = name         # table name
@@ -32,6 +33,7 @@ class Table:
         self.num_columns  = num_columns  # table num columns
         self.index        = Index(self)  # index columns-
         self.buffer_pool  = None         # main Buffer Pool object
-        self.lock_manager = {}           # if path in dict, it is locked (remove when unlocked)
+        self.lock_manager = LockManager()# if path in dict, it is locked (remove when unlocked)
         self.merge_count  = 0            # increments after update, merges when count reaches threshold
         self.merge_frequency = 100       # number of updates inbetween each time merge is called
+        self.path = path

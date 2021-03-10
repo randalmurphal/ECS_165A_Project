@@ -10,7 +10,7 @@ class Index:
 
     def __init__(self, table):
         # One index for each table. All are empty initially.
-        self.indices = [None] *  table.num_columns
+        self.indices = [None] * table.num_columns
         self.table = table
 
     """
@@ -113,8 +113,8 @@ class Index:
         Returns all paths for all base pages in disk & buffer
     '''
     def get_base_paths(self):
-        regex = re.compile("./template/ECS165/%s/PR[0-9]+/BP[0-9]+"%self.table.name)
-        rootdir = './template/ECS165/'
+        regex = re.compile("./template/%s/%s/PR[0-9]+/BP[0-9]+"%(self.table.path,self.table.name)
+        rootdir = './template/%s/' %self.table.path
         file_paths = []
         # Check in disk
         for subdir, dirs, files in os.walk(rootdir, topdown=False):

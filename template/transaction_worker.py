@@ -21,7 +21,7 @@ class TransactionWorker:
     def run_transaction(self):
         for i, transaction in enumerate(self.transactions):
             # each transaction returns True if committed or False if aborted
-            #print("THIS IS THE ", i, " TRANSACTION FOR THIS WORKER (should only be 1)")
+            # print("THIS IS THE ", i, " TRANSACTION FOR THIS WORKER (should only be 1)")
             self.stats.append(transaction.run())
         # stores the number of transactions that committed
         self.result = len(list(filter(lambda x: x, self.stats)))

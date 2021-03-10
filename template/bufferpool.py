@@ -15,7 +15,7 @@ class MetaData():
         self.baseRID_count   = 0     # number of base records
         self.tailRID_count   = 0     # number of tail records
         self.key_dict        = {}    # key:(pr#, bp#, merge_number, rec_ind)
-        self.key_dict_locked = False # When merging lock to prevent insert changes
+        # self.key_dict_locked = False # When merging lock to prevent insert changes
 
 class BufferPool():
 
