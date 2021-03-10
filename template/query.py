@@ -194,6 +194,7 @@ class Query:
 
     def select(self, value, column, query_columns):
         records = []
+        # ??????????????? Check the value in the dict
         # if key column
         if column == 0:
             # get base page (checks if in buffer or not)
@@ -355,6 +356,11 @@ class Query:
     """
     def update(self, key, *columns):
         # get base page & pin -- adds to bufferpool
+        lock_manager = self.table.lock_manager.lock_recs
+        trans_num = threading.get_ident()
+        if key in lock_manager and trans_num != lock_manager[key][2]:
+            return False
+
         buffer_lock.acquire()
         base_page = self.get_from_disk(key=key)
         base_page.isPinned += 1
@@ -539,6 +545,7 @@ class Query:
         - returns sum
     '''
     def sum(self, start_range, end_range, aggregate_column_index):
+
         file_paths = self.get_base_paths() # gets all base page paths
         sum = 0
         start_range, end_range = self.start_is_less(start_range, end_range)

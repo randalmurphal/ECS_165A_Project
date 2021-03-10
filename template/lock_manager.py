@@ -14,3 +14,6 @@ class LockManager():
 
     def check_lock_dict(self,key,lock_type,thread_num):
         pass
+
+    def add_read_lock(self,key,lock_type,thread_num):
+        pass

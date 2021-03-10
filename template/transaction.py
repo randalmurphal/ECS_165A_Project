@@ -279,7 +279,7 @@ class Transaction:
     '''
     def get_updated_tail_cols(self, tail_page, tail_rec_ind):
         # TODO: implement this
-        most_updated=tail_page.retrieve(tail_rec_ind)
+        most_updated=tail_page.pages[0].retrieve(tail_rec_ind)
         location=most_updated[3]
 
 
