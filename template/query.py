@@ -1,9 +1,9 @@
-from template.table import Table, Record
+from template.table import *
 from template.index import Index
 from template.conceptual_page import ConceptualPage
 from template.page_range import PageRange
 from template.page import Page
-from template.bufferpool import BufferPool
+from template.bufferpool import *
 from template.logger import Logger
 from random import randint
 
@@ -18,7 +18,12 @@ MAX_BASE_PAGE_SIZE  = 512
 MAX_PHYS_PAGE_SIZE  = 512
 buffer_lock   = threading.Lock()
 key_dict_lock = threading.Lock()
-
+#ISSUES : 
+#CURRENT
+#seems to be a problem whenever evict() is called in addconceptual
+#why is it inserting to baserid = 7k+, not using threads properly to insert, insert works fine in other tester
+#FOR FUTURE
+#logger is not properly logging
 
 class Query:
     """
@@ -64,10 +69,14 @@ class Query:
     """
     # Tuple of columns(Key,Value)
     def insert(self, *columns):
+        print("INSERTING ", *columns)
+        print("Base RID Count: ", self.buffer_pool.meta_data.baseRID_count)
         key = columns[0]
         new_page_range, new_base_page = self.get_new_bools()
+        self.buffer_pool.meta_data.baseRID_count += 1
         # if we need to create a new page range
         if new_page_range:
+            #print("creating new PR because RID count is: ", self.buffer_pool.meta_data.baseRID_count )
             cpage = self.add_new_pr(*columns)
             if cpage == None:
                 return False
@@ -85,6 +94,7 @@ class Query:
         self.insert_buffer_meta(key)
         cpage.dirty     = True
         cpage.isPinned -= 1
+        #print("inserted: ", columns)
         return True
 
     ### ******* Insert Helpers ******* ###
@@ -125,8 +135,9 @@ class Query:
         if not is_in_buffer:
             cpage = self.get_from_disk(path)
             self.buffer_pool.addConceptualPage(cpage)
+        #print("CPAGE UP TO HERE SHOULD BE FINE: ", cpage, "AND is_in_buffer SHOULD BE true: ", is_in_buffer)
         cpage.isPinned += 1
-        cpage = self.buffer_pool.populateConceptualPage(columns, cpage)
+        self.buffer_pool.populateConceptualPage(columns, cpage)
         buffer_lock.release()
         return cpage
 
@@ -160,7 +171,7 @@ class Query:
         # key_dict_lock.acquire()
         # key_dict_lock.release()
         self.buffer_pool.meta_data.key_dict[key]  = self.get_loc()
-        self.buffer_pool.meta_data.baseRID_count += 1
+        #self.buffer_pool.meta_data.baseRID_count += 1
 
     ### ******* End of Insert Helpers ******* ###
 
@@ -390,7 +401,7 @@ class Query:
                 tail_page.isPinned -= 1
                 tail_path = './template/ECS165/' + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
                 buffer_lock.acquire()
-                tail_page = self.createConceptualPage(tail_path, True, *columns)
+                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                 tail_page.isPinned += 1
                 buffer_lock.release()
             tail_page = self.create_tail(new_schema, prev_tail_values, tail_page, rec_ind, *columns)
@@ -687,7 +698,7 @@ class Query:
         Gets a page from disk
         - if no path, get path from key
     '''
-    def get_from_disk(self, key=None, path=None):
+    def get_from_disk(self, path=None, key = None):
         # If no path, get path for base page from key
         if path == None:
             if key == None:
@@ -718,7 +729,7 @@ class Query:
         Returns path to page range directory
     '''
     def create_pr_dir(self):
-        pr_path = os.path.join('./template/ECS165/'+self.table.name, "PR"+str(self.buffer_pool.meta_data.currpr))
+        pr_path = './template/ECS165/'+self.table.name+ "/PR"+str(self.buffer_pool.meta_data.currpr)
         os.mkdir(pr_path)  #insert new PR and BP into disk
         return pr_path
 
@@ -729,7 +740,7 @@ class Query:
     def in_buffer(self, path):
         for cpage in self.buffer_pool.conceptual_pages:
             if cpage.path == path:
-                buffer_lock.release()
+                #buffer_lock.release()   not sure if needed in insert to bp, could be needed if in buffer called elsewhere
                 return cpage, True
         return None, False
 
@@ -738,6 +749,7 @@ class Query:
     '''
     def add_meta(self, cpage):
         # Get current time value
+        
         current_time = datetime.now().time()
         time_val     = ""
         hour         = 0

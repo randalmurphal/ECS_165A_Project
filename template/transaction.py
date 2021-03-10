@@ -1,5 +1,6 @@
 from template.table import Table, Record
 from template.index import Index
+from template.logger import Logger
 import threading
 
 class Transaction:

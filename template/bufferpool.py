@@ -55,6 +55,7 @@ class BufferPool():
         # evict until space in buffer
         if len(self.conceptual_pages) >= self.max_capacity:
             self.evict()
+            print("EVICTING IN ADDCONCEPTUAL\n")
         self.add_key(conceptualPage) # add page path to buffer_keys
         self.conceptual_pages.append(conceptualPage)
 
