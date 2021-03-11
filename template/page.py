@@ -62,11 +62,8 @@ class Page:
 		self.path = path
 
 	def retrieve(self, record_num):
+		aborted = False
 		trans_num = threading.get_ident()
-		if record_num not in self.locked_recs[trans_num]:
-			self.locked_recs[trans_num].append(record_num)
-		else:
-			return -1
 		offset = record_num * 8
 		temp = [0,0,0,0,0,0,0,0]
 		for i in range(0,8):

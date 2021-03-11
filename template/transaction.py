@@ -1,7 +1,7 @@
 from template.table import Table, Record
 from template.index import Index
 from template.logger import Logger
-import threading
+import threading, copy
 
 class Transaction:
 
@@ -13,6 +13,7 @@ class Transaction:
         self.query_pages = []
         self.logger      = Logger()
         self.query_obj   = None
+        self.completed_t = {}
 
     """
     # Adds the given query to this transaction
@@ -25,11 +26,11 @@ class Transaction:
         self.queries.append((query, *args))
 
     # If you choose to implement this differently this method must still return True if transaction commits or False on abort
-    def run(self):
+    def run(self, query_obj):
+        self.query_obj = query_obj
         trans_num = threading.get_ident()
-        # Create a new thread here?
         for query, *args in self.queries:
-            self.query_obj = query.__self__
+            query_type = query.__name__
             if query_type == "sum":
                 # Logs start & end ranges
                 log_msg = "%i, %s, %i, %i\n"%(trans_num, query_type, args[0], args[1])
@@ -44,56 +45,23 @@ class Transaction:
             self.logger.write_log(log_msg)
             result = query(*args)
             # Log query success
-            query_type = query.__name__
             # If the query has failed the transaction should abort
             if result == False:
                 # note where we failed
-                return self.abort(query_obj)
-        return self.commit()
+                return self.abort()
+        log_msg = "%i, Transaction Complete\n"%trans_num
+        self.logger.write_log(log_msg)
+        ret = self.commit()
+        # print("\n\n---Done Committed---\n\n")
+        return ret
 
-    def abort(self, query_obj):
-        # trans_num =
-        trans_num  = threading.get_ident()
-        trans_logs = self.query_obj.logger.get_log(trans_num)
-        # Go to the dictionary and get all the locations of the records you wish to abort
-        # Get all the
-        # self.query_obj.locked_recs[key] = (type_of_lock,loc_of_rec,thread_num)
-        # lock_manager = query_obj.table.lock_manager
-        # for key in lock_manager:
-        #     if lock_manager[key][2] == trans_num:
-        #          # Go to location of the record
-        #          # Open up the path for the record
-        #          # Remove the rec and continue
-        #          # If in bufferpool
-        #          bufferpool = query_obj.table.buffer_pool
-
-                 # Get the bufferpool object and go through the dict, remove the values
-
-        return False
-    '''
-        Parses through logs and returns lines of select or update for
-        this aborted transaction thread
-        returns: array of relevant lines in logs
-    '''
-    def get_logs(self):
-        logs = []
-        trans_num = threading.get_ident()
-        with open(self.query_obj.logger.log_path, 'r') as log_file:
-            lines = log_file.readlines()
-            for line in lines:
-                split = line.split(',')
-                file_trans_num = split[0]
-                query_type     = split[1]
-                if file_trans_num == trans_num and (query_type == 'insert' or query_type == 'update'):
-                    logs.append(line)
-        return logs
 
     '''
         Before an abort, check bufferpool and revert changes before sending back
         to the transaction abort (which checks through the disk for aborted changes)
     '''
-    def abort_buffer(self):
-        logs = self.query_obj.get_logs()
+    def abort(self):
+        logs = self.get_logs()
         # append operations and then call function to perform undo
         abort_insert_logs = []
         abort_update_logs = []
@@ -107,6 +75,25 @@ class Transaction:
         self.abort_inserts(abort_insert_logs)
         self.abort_updates(abort_update_logs)
 
+        return False
+
+    '''
+    Parses through logs and returns lines of select or update for
+    this aborted transaction thread
+    returns: array of relevant lines in logs
+    '''
+    def get_logs(self):
+        logs = []
+        trans_num = threading.get_ident()
+        with open(self.query_obj.logger.log_path, 'r') as log_file:
+            lines = log_file.readlines()
+            for line in lines:
+                split = line.split(',')
+                file_trans_num = split[0]
+                query_type     = split[1]
+                if file_trans_num == trans_num and (query_type == 'insert' or query_type == 'update'):
+                    logs.append(line)
+        return logs
     '''
         Undoes inserts for transactions still in bufferpool:
             - performs a delete on that record (schema=0's & has
@@ -114,21 +101,11 @@ class Transaction:
     '''
     def abort_inserts(self, insert_logs):
         for log in insert_logs:
-            key  = int(log.split(',')[2])
-            loc  = self.query_obj.key_dict[key]
-            path = self.get_log_path(loc)
-            if path in self.buffer_pool.buffer_keys:
-                cpage = self.buffer_pool.buffer_keys[path]
-                '''
-                    Want to change isPinned=0 and dirty=False if all changes
-                    to this page are aborted
-                        - maybe have a map/arr on the page that holds each thread
-                            that has changed this page, if no other threads then change vals
-                '''
-                self.delete(key)
-            else:
-                # Do stuff with disk
-                pass
+            key   = int(log.split(',')[2])
+            loc   = self.query_obj.buffer_pool.meta_data.key_dict[key]
+            path  = self.get_log_path(loc)
+            cpage = self.query_obj.get_from_disk(path=path)
+            self.query_obj.delete(key)
 
     '''
         Undoes updates for transactions still in bufferpool:
@@ -149,18 +126,13 @@ class Transaction:
     def abort_updates(self, update_logs):
         for log in update_logs:
             key  = int(log.split(',')[2])
-            loc  = self.key_dict[key] # gets location tuple for record
+            loc  = self.query_obj.buffer_pool.meta_data.key_dict[key] # gets location tuple for record
             path = self.get_log_path(loc)
             rec_ind = loc[3]
-            if path in self.buffer_pool.buffer_keys:
-                cpage = self.buffer_pool.buffer_keys[path]
-                cpage.isPinned += 1
-                # Get the update values without this transaction's updates and add to indirection
-                self.add_abort_tail(loc, cpage)
-                cpage.isPinned -= 1
-            else:
-                # Not in buffer, get from disk
-                pass
+            cpage = self.query_obj.get_from_disk(path=path)
+            cpage.isPinned += 1
+            self.add_abort_tail(loc, cpage)
+            cpage.isPinned -= 1
 
     '''
         Takes a location for query record
@@ -178,8 +150,8 @@ class Transaction:
                 (should be most prev update that is not in this transaction)
     '''
     def add_abort_tail(self, loc, cpage):
-        new_vals   = [None]*self.table.num_columns
-        new_schema = np.zeros(self.table.num_columns)
+        new_vals   = [None]*self.query_obj.table.num_columns
+        new_schema = np.zeros(self.query_obj.table.num_columns)
         base_indir = cpage.pages[0]
         curr_indir = cpage.pages[0]
         rec_ind    = loc[3]
@@ -196,11 +168,11 @@ class Transaction:
                 prev_tail_page    = tail_page
                 prev_tail_rec_ind = tail_rec_ind
 
-            tail_path, tail_rec_ind = curr_indir[prev_RID]
+            tail_path, tail_rec_ind, tail_thread_num = curr_indir[prev_RID]
             buffer_lock.acquire()
-            tail_page, is_in_buffer = self.in_buffer(tail_path)
+            tail_page, is_in_buffer = self.query_obj.in_buffer(tail_path)
             if not is_in_buffer:
-                tail_page = self.get_from_disk(path=tail_path)
+                tail_page = self.query_obj.get_from_disk(path=tail_path)
             tail_page.isPinned += 1
             buffer_lock.release()
             # Check to see if last tail rec was in transaction, if not then update previous indirection, else dont
@@ -214,11 +186,11 @@ class Transaction:
             if tail_RID != -1:
                 prev_RID = tail_RID
             tail_RID = tail_page.pages[1].retrieve(tail_rec_ind)
-            in_trans = self.is_in_transaction(tail_page, tail_rec_ind)
+            in_trans = (tail_thread_num == threading.get_ident())
             # if in this transaction, dont take updates & change pointers
             if in_trans:
                 # if reached end of updates for this record & want to remove last update
-                temp_path, temp_rec_ind = curr_indir[tail_RID]
+                temp_path, temp_rec_ind, temp_thread_num = curr_indir[tail_RID]
                 # if the same page as the indirection is pointing to
                 if temp_path == tail_page.path and temp_rec_ind == tail_rec_ind:
                     # If prev_tail_page is None, then we know we are removing all updates.
@@ -226,7 +198,7 @@ class Transaction:
                     if prev_tail_page == None:
                         del base_indir[rec_RID]
                         base_schema = cpage.pages[3][rec_ind]
-                        base_schema = np.zeros(self.table.num_columns)
+                        base_schema = np.zeros(self.query_obj.table.num_columns)
                     else:
                         # set prev indirection to point to itself
                         prev_indir = (prev_tail_page.path, prev_tail_rec_ind)
@@ -247,60 +219,57 @@ class Transaction:
             tail_page.isPinned -= 1
             pr_num    = loc[0]
             buffer_lock.acquire()
-            tail_page = self.new_tail_page(pr_num) # adds to buffer
+            tail_page = self.query_obj.new_tail_page(pr_num) # adds to buffer
             tail_page.isPinned += 1
             buffer_lock.release()
             tail_rec_ind = 0
         else:
             tail_rec_ind = tail_page.num_records
         # Write new values to page
-        self.buffer_pool.populateConceptualPage(new_vals, tail_page)
+        self.query_obj.buffer_pool.populateConceptualPage(new_vals, tail_page)
         # Set new tail indirection to most recent update before this
         tail_indir = tail_page.pages[0]
         tail_RID   = tail_page.pages[1].retrieve(tail_rec_ind)
         tail_indir[tail_RID] = base_indir[recRID]
         tail_page.isPinned -= 1
         # Add new tail record to base rec indirection
-        base_indir[rec_RID] = (tail_page.path, tail_rec_ind)
+        base_indir[rec_RID] = (tail_page.path, tail_rec_ind, threading.get_ident())
         # update base schema
         cpage.pages[3][rec_ind] = new_schema
 
     '''
-        Returns True if a tail record is in this transaction, else False
-    '''
-    def is_in_transaction(self, tail_page, tail_rec_ind):
-        # TODO: implement this
-
-        pass
-
-    '''
         Returns the values updated in this tail record (from previous tail record)
             -- by checking schema (need to update schema in this way in update)
+            1,2,3,4->1,3,4,4 0110
+            1,3,4,4->1,5,4,4 0100
+            return [none,3,4,none]
     '''
     def get_updated_tail_cols(self, tail_page, tail_rec_ind):
-        # TODO: implement this
-        most_updated=tail_page.pages[0].retrieve(tail_rec_ind)
-        location=most_updated[3]
+        values = []
+        tail_page_schema = tail_page.pages[3][tail_rec_ind]
+        for i, val in enumerate(tail_page_schema):
+            if val == 1:
+                values.append(tail_page.pages[6+i].retrieve(tail_rec_ind))
+            else:
+                values.append(None)
+        return values
 
-
-        pass
-
-    def commit(self,query_obj):
-        lock_manager = query_obj.table.lock_manager
-        buffer_pool = query_obj.table.buffer_pool
-        trans_num = threading.get_ident()
-        # Evicting all pages in the BufferPool, with the thread_num
-            # 1. Go to lock_manager and check if the key is there for a transaction
-            # 2. Go to bufferpool and check if the key is there
-            # 3. Write to disk
-        # Release your locks on that transaction num
-        for key in lock_manager:
-            if lock_manager[key][2] == trans_num:
-                buffer_key = lock_manager.pop(key)
-                if buffer_key in buffer_pool.buffer_keys:
-                    # Write to disk here
-        ###########################################
-
+    # Evicting all pages in the BufferPool, with the thread_num
+        # 1. Go to lock_manager and check if the key is there for a transaction
+        # 2. Go to bufferpool and check if the key is there
+        # 3. Write to disk
+    # Release your locks on that transaction num
+    def commit(self):
+        # print("\n\n--- Committing --- \n\n")
+        lock_manager = self.query_obj.table.lock_manager.lock_recs
+        buffer_pool  = self.query_obj.table.buffer_pool
+        trans_num    = threading.get_ident()
+        popped_keys  = []
+        for key in lock_manager.keys():
+            if lock_manager[key][1] == trans_num:
+                popped_keys.append(key)
+        while popped_keys:
+            lock_manager.pop(popped_keys.pop())
         return True
 
 

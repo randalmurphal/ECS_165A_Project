@@ -113,7 +113,7 @@ class Index:
         Returns all paths for all base pages in disk & buffer
     '''
     def get_base_paths(self):
-        regex = re.compile("./template/%s/%s/PR[0-9]+/BP[0-9]+"%(self.table.path,self.table.name)
+        regex = re.compile("./template/%s/%s/PR[0-9]+/BP[0-9]+"%(self.table.path,self.table.name))
         rootdir = './template/%s/' %self.table.path
         file_paths = []
         # Check in disk

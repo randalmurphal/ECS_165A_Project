@@ -1,9 +1,9 @@
 from template.config import *
 from template.page import Page
 from template.conceptual_page import ConceptualPage
-from template.query import MAX_INT
 import math, threading, os, pickle, copy
 import numpy as np
+MAX_INT = int(math.pow(2, 63) - 1)
 
 #we probably want meta data to be stored in the files
 class MetaData():
@@ -21,7 +21,7 @@ class BufferPool():
 
     def __init__(self, table_name, num_columns):
         self.meta_data        = MetaData() # holds table meta data
-        self.max_capacity     = 16         # max number of cpages in buffer
+        self.max_capacity     = 64         # max number of cpages in buffer
         self.conceptual_pages = []         # cpage objects
         self.buffer_keys      = {}         # page_path: page_object
         self.table_name       = table_name # name of table
@@ -29,6 +29,7 @@ class BufferPool():
         self.merge_tails      = []         # holds tail pages for merge bases
         self.first            = True       # for manual check to make first PR
         self.trans_recs       = {}         # holds [(location, path, "insert/update")] changed in each transaction
+
 
     '''
         Creates and adds new cpage to buffer_pool
@@ -54,8 +55,8 @@ class BufferPool():
     def addConceptualPage(self, conceptualPage):
         # evict until space in buffer
         if len(self.conceptual_pages) >= self.max_capacity:
+            print("\n\nlen cpage: %i\n\n"%len(self.conceptual_pages))
             self.evict()
-            print("EVICTING IN ADDCONCEPTUAL\n")
         self.add_key(conceptualPage) # add page path to buffer_keys
         self.conceptual_pages.append(conceptualPage)
 
@@ -79,6 +80,7 @@ class BufferPool():
         - Writes to disk if page is dirty, else just remove from buffer
     '''
     def evict(self):   #evict a physical page from bufferpool (LRU)
+        # print("\n\n --- EVICT --- \n\n")
         i = 0
         cpage = self.conceptual_pages[i]
         # Loop through until finds an unpinned page
@@ -107,7 +109,9 @@ class BufferPool():
         Close: evicts all cpages from buffer_pool
     '''
     def close(self):
+        # print("\n\n---CLOSING---\n\n")
         while self.conceptual_pages:
+            self.conceptual_pages[0].isPinned = 0
             self.evict()
 
     '''
@@ -153,14 +157,14 @@ class BufferPool():
         tail_page_objs = tail_pages
         tail_page_values = []
         new_base_page.pages[1]
-        baseRID:(tail_path,tail_RID)
+        # baseRID:(tail_path,tail_RID)
         # go through each
         for base_rec_num in range(new_base_page.num_records):
             base_rec_RID = new_base_page.pages[1].retrieve(base_rec_num)
             # if not in indirection, we don't need to check for updates because it hasn't been updated
             if not base_rec_RID in indirection.keys():
                 continue
-            tail_page_path, tail_rec_ind = indirection[base_rec_RID]
+            tail_page_path, tail_rec_ind, _ = indirection[base_rec_RID]
             # iterate through list of tail pages
             for tail_page in tail_page_objs:
                 # check if the tail page were looking at in the list of tail pages is the one containing the latest tail record for this base record
@@ -213,6 +217,7 @@ class BufferPool():
             to the keys in the new_base_page and replace path
     '''
     def merge(self):
+        # print("begin merge")
         base_pages = self.get_base_pages()
         i = 0
         for base_page in base_pages:
@@ -226,6 +231,7 @@ class BufferPool():
             self.change_dict_vals(new_base, new_base_path)
             self.merge_bases.pop(i)
             base_page.merge_num += 1
+        # print("end merge")
         return
 
     '''

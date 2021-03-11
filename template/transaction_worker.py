@@ -11,6 +11,7 @@ class TransactionWorker:
         self.stats  = []
         self.transactions = []
         self.result = 0
+        self.query_obj = None
 
     """
     Appends t to transactions
@@ -22,13 +23,17 @@ class TransactionWorker:
         for i, transaction in enumerate(self.transactions):
             # each transaction returns True if committed or False if aborted
             # print("THIS IS THE ", i, " TRANSACTION FOR THIS WORKER (should only be 1)")
-            self.stats.append(transaction.run())
+            self.stats.append(transaction.run(self.query_obj))
         # stores the number of transactions that committed
         self.result = len(list(filter(lambda x: x, self.stats)))
-
+        return
 
     """
     Runs a transaction
     """
     def run(self):
-        threading.Thread(target=self.run_transaction).start()
+        self.query_obj = self.transactions[0].queries[0][0].__self__
+        thread = threading.Thread(target=self.run_transaction)
+        thread.start()
+        # thread.join()
+        return
