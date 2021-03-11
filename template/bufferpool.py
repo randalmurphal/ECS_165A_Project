@@ -55,7 +55,7 @@ class BufferPool():
     def addConceptualPage(self, conceptualPage):
         # evict until space in buffer
         if len(self.conceptual_pages) >= self.max_capacity:
-            print("\n\nlen cpage: %i\n\n"%len(self.conceptual_pages))
+            # print("\n\nlen cpage: %i\n\n"%len(self.conceptual_pages))
             self.evict()
         self.add_key(conceptualPage) # add page path to buffer_keys
         self.conceptual_pages.append(conceptualPage)
@@ -80,7 +80,7 @@ class BufferPool():
         - Writes to disk if page is dirty, else just remove from buffer
     '''
     def evict(self):   #evict a physical page from bufferpool (LRU)
-        # print("\n\n --- EVICT --- \n\n")
+        print("\n\n --- EVICT --- \n\n")
         i = 0
         cpage = self.conceptual_pages[i]
         # Loop through until finds an unpinned page
@@ -104,15 +104,21 @@ class BufferPool():
     # '''
     # def remove(self):
 
+    def close_evict(self, key):
+        for i, page in enumerate(self.conceptual_pages):
+            if page.path == key:
+                self.remove_key(page)
+                self.conceptual_pages.pop(i)
+                return
+
 
     '''
         Close: evicts all cpages from buffer_pool
     '''
     def close(self):
-        # print("\n\n---CLOSING---\n\n")
-        while self.conceptual_pages:
-            self.conceptual_pages[0].isPinned = 0
-            self.evict()
+        buf_keys = copy.deepcopy(self.buffer_keys)
+        for key in buf_keys.keys():
+            self.close_evict(key)
 
     '''
         Remove_key: Removes a cpage's path from buffer_keys

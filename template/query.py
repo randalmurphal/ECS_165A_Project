@@ -376,7 +376,6 @@ class Query:
     Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, key, *columns):
-        # print("updating\n")
         # get base page & pin -- adds to bufferpool
         write_lock = self.locked_for_write(key)
         lock_manager = self.table.lock_manager.lock_recs
@@ -389,7 +388,6 @@ class Query:
         buffer_lock.release()
         # Get tail page -- adds to bufferpool
         tail_page = self.get_tail_page(base_page, key, False, *columns)
-        # print("updating2\n")
         if tail_page == None:
             return False
         success   = self.update_tail_page(base_page, tail_page, key, *columns)
@@ -404,10 +402,7 @@ class Query:
                 self.buffer_pool.merge_bases.append(base_page.path)
         self.table.merge_count += 1
         if self.table.merge_count == self.table.merge_frequency:
-            print("start merge")
             threading.Thread(target=self.buffer_pool.merge()).start()
-            print("end merge")
-        # print("updating3\n")
         return True
 
     ### ******* Update Helpers ******* ###
@@ -492,6 +487,8 @@ class Query:
                 buffer_lock.release()
         if tail_page == None:
             return False
+        tail_rec_ind = tail_page.num_records - 1
+        tail_path = tail_page.path
         base_page.pages[3][rec_ind]      = new_schema
         base_page.pages[0][base_rec_RID] = tail_path, tail_rec_ind, thread_num
         tail_page.isPinned -= 1
