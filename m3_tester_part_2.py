@@ -15,7 +15,7 @@ grades_table = db.create_table('Grades', 5, 0)
 keys = []
 records = {}
 seed(3562901)
-num_threads = 8
+num_threads = 1
 
 try:
     grades_table.index.create_index(1)
@@ -40,7 +40,7 @@ for i in range(num_threads):
 worker_keys = [ {} for t in transaction_workers ]
 
 query = Query(grades_table)
-for i in range(0, 1000):
+for i in range(0, 1500):
     key = 92106429 + i
     keys.append(key)
     i = i % num_threads
@@ -90,6 +90,8 @@ for key in keys:
     if correct != result:
         print('select error on primary key', key, ':', result, ', correct:', correct)
         score -= 1
+    else:
+        print('select success')
 print('Score', score, '/', len(keys))
 
 print("\n\n--- DONE ---\n\n")
