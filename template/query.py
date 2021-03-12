@@ -15,7 +15,7 @@ from datetime import datetime
 import copy
 
 MAX_INT = int(math.pow(2, 63) - 1)
-MAX_PAGE_RANGE_SIZE = 8192
+MAX_PAGE_RANGE_SIZE = 65536
 MAX_BASE_PAGE_SIZE  = 512
 MAX_PHYS_PAGE_SIZE  = 512
 buffer_lock = threading.Lock()
@@ -48,13 +48,16 @@ class Query:
     """
     def delete(self, key):
         # Make sure cpage is in buffer
-        buffer_lock.acquire() # lock thread
+        # print("buffer_lock1") # lock thread
+        buffer_lock.acquire()
+        # print("buffer_lock1 acquired") # lock thread
         base_page = self.get_from_disk(key=key)
         base_page.isPinned += 1
         _, is_in_buffer = self.in_buffer(base_page.path)
         if not is_in_buffer:
             # if not in buffer, add to buffer
             self.buffer_pool.addConceptualPage(base_page)
+        # print("buffer_lock1 released")
         buffer_lock.release()
         _, _, _, base_rec_ind = self.buffer_pool.meta_data.key_dict[key]
         # Set schema to be 0's
@@ -76,30 +79,35 @@ class Query:
         lock_manager = self.table.lock_manager.lock_recs
         trans_num = threading.get_ident()
         key = columns[0]
+        insert_lock.acquire()
         if self.locked_for_write(key) and trans_num != lock_manager[key][1]:
             # Insert is a write operation, we abort on read/write
+            insert_lock.release()
             return False
-        insert_lock.acquire()
         new_page_range, new_base_page = self.get_new_bools()
-        # print("new_page_range, new_base_page: ", new_page_range, new_base_page)
-        self.buffer_pool.meta_data.baseRID_count += 1
         # if we need to create a new page range
         if new_page_range:
             #print("creating new PR because RID count is: ", self.buffer_pool.meta_data.baseRID_count )
             cpage = self.add_new_pr(*columns)
             if cpage == None:
+                insert_lock.release()
                 return False
         else:
             # if need new conceptual page, create in currpr directory
             if new_base_page:
                 cpage = self.add_new_bp(*columns)
                 if cpage == None:
+                    insert_lock.release()
                     return False
             else:
                 cpage = self.insert_to_bp(*columns)
                 if cpage == None:
+                    insert_lock.release()
                     return False
-        self.add_meta(cpage)
+        self.buffer_pool.meta_data.baseRID_count += 1
+        cpage.dirty = True
+        cpage.isPinned -= 1
+        insert_lock.release()
         self.insert_buffer_meta(key)
         # grab location of record for updating index
         rec_loc = self.buffer_pool.meta_data.key_dict[key]
@@ -114,10 +122,6 @@ class Query:
                 col_index[col_val].append((rec_page_index, cpage.path))
             except:
                 col_index[col_val] = [(rec_page_index, cpage.path)]
-
-        cpage.dirty     = True
-        cpage.isPinned -= 1
-        insert_lock.release()
         return True
 
     ### ******* Insert Helpers ******* ###
@@ -127,13 +131,16 @@ class Query:
         - returns new base page
     '''
     def add_new_pr(self, *columns):
+        # print("b1")
         buffer_lock.acquire()
+        # print("b1 acquired")
         self.buffer_pool.meta_data.currbp = 0
         self.buffer_pool.meta_data.currpr += 1
         path = self.create_pr_dir() + '/BP' + str(self.buffer_pool.meta_data.currbp)
-        # print("thread_num, add_new_pr path: ", threading.get_ident(), path)
         cpage = self.buffer_pool.createConceptualPage(path, False, *columns)
         cpage.isPinned += 1
+        self.add_meta(cpage)
+        # print("b1 released")
         buffer_lock.release()
         return cpage
 
@@ -144,9 +151,9 @@ class Query:
         buffer_lock.acquire()
         self.buffer_pool.meta_data.currbp += 1
         path  = './template/%s/'%(self.table.path) + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
-        # print("thread_num, add_new_bp path: ", threading.get_ident(), path)
         cpage = self.buffer_pool.createConceptualPage(path, False, *columns)
         cpage.isPinned += 1
+        self.add_meta(cpage)
         buffer_lock.release()
         return cpage
 
@@ -154,15 +161,12 @@ class Query:
         Insert record into bp that already exists
     '''
     def insert_to_bp(self, *columns):
-        buffer_lock.acquire()
         path = './template/%s/'%(self.table.path) + self.table.name + '/PR' + str(self.buffer_pool.meta_data.currpr) + '/BP' + str(self.buffer_pool.meta_data.currbp)
-        # print("thread_num, insert_to_bp path: ", threading.get_ident(), path)
-        cpage = self.get_from_disk(path)
-        # cpage, is_in_buffer = self.in_buffer(path)
-        # if not is_in_buffer:
-        #     self.buffer_pool.addConceptualPage(cpage)
-        cpage.isPinned += 1
+        cpage = self.get_from_disk(path=path)
+        buffer_lock.acquire()
         self.buffer_pool.populateConceptualPage(columns, cpage)
+        self.add_meta(cpage)
+        # print("b3 released")
         buffer_lock.release()
         return cpage
 
@@ -205,37 +209,42 @@ class Query:
 
     def select(self, value, column, query_columns):
         trans_num = threading.get_ident()
-        records = []
-        key   = value
+        records   = []
         lock_manager = self.table.lock_manager.lock_recs
-        if self.locked_for_read(key) and trans_num != lock_manager[key][1]:
-            return False
-        if key not in lock_manager.keys():
-            lock_dict = self.table.lock_manager
-            lock_dict.add_lock(key,"Read",trans_num)
         # if key column
         if column == 0:
+            key = value
             # get base page (checks if in buffer or not)
+            # print("b0")
             buffer_lock.acquire()
-            cpage = self.get_from_disk(key=key)
-            cpage.isPinned += 1
+            # print("b0 acquire")
+
+            if self.locked_for_read(key) and trans_num != lock_manager[key][1]:
+                buffer_lock.release()
+                return False
+            if key not in lock_manager.keys():
+                lock_dict = self.table.lock_manager
+                lock_dict.add_lock(key, "Read", trans_num)
+            # cpage.isPinned += 1
+            # print("b0 released")
             buffer_lock.release()
+            cpage = self.get_from_disk(key=key)
             # Get index of record based on key
             rec_index = self.get_rec_ind(cpage, key)
             rec_RID   = cpage.pages[1].retrieve(rec_index)
             if rec_RID == -1:
-                print("recRID = -1")
                 return False
             indirection = cpage.pages[0]
             # if record has been updated => grab newest values from tail page
             if rec_RID in indirection.keys():
+                # buffer_lock.acquire()
                 record = self.get_updated_values(key, query_columns, cpage)
+                # buffer_lock.release()
             # Hasnt been updated, grab all values according to query_columns
             else:
                 # Gets record from key
                 record = self.get_base_values(key, query_columns, cpage)
             if record == None:
-                print("None")
                 return False
             records.append(record)
             cpage.isPinned -= 1
@@ -246,10 +255,15 @@ class Query:
                     val_index = index[value]
                     for rec_val in val_index:
                         rec_ind, path = rec_val
-                        record = self.get_from_index(rec_ind, path, query_columns)
+                        record, key = self.get_from_index(rec_ind, path, query_columns)
                         if record == None:
-                            print("None")
                             return False
+                        # if self.locked_for_read(key) and trans_num != lock_manager[key][1]:
+                        #     buffer_lock.release()
+                        #     return False
+                        if key not in lock_manager.keys():
+                            lock_dict = self.table.lock_manager
+                            lock_dict.add_lock(key, "Read", trans_num)
                         records.append(record)
             else:
                 base_paths = self.get_base_paths()
@@ -257,7 +271,6 @@ class Query:
                 for path in base_paths:
                     record_vals = self.get_records(path, value, column, query_columns)
                     if record_vals == None:
-                        print("None")
                         return False
                     records = list(np.concatenate((records, record_vals)))
         return records
@@ -326,37 +339,34 @@ class Query:
         Returns record from index map
     '''
     def get_from_index(self, rec_ind, path, query_columns):
-        buffer_lock.acquire()
         base_page = self.get_from_disk(path=path)
-        base_page.isPinned += 1
-        buffer_lock.release()
-        base_RID     = base_page.pages[1].retrieve(rec_ind)
-        key          = base_page.pages[6].retrieve(rec_ind)
-        indirection  = base_page.pages[0]
+        base_RID    = base_page.pages[1].retrieve(rec_ind)
+        key         = base_page.pages[6].retrieve(rec_ind)
+        indirection = base_page.pages[0]
         if self.locked_for_read(key):
-            return None
+            thread_num  = self.table.lock_manager.lock_recs[key][1]
+            if thread_num != threading.get_ident():
+                return None
         if base_RID in indirection.keys():
             record = self.get_updated_values(key, query_columns, base_page)
         else:
             record = self.get_base_values(key, query_columns, base_page)
         base_page.isPinned -= 1
-        return record
+        return record, key
 
     '''
         Returns records from paths
     '''
     def get_records(self, path, value, column, query_columns):
         records = []
-        buffer_lock.acquire()
         base_page = self.get_from_disk(path=path)
-        base_page.isPinned += 1
-        buffer_lock.release()
         indirection = base_page.pages[0]
         # for each record in base page
         for rec_ind in range(base_page.num_records):
             rec_RID = base_page.pages[1].retrieve(rec_ind)
             key = base_page.pages[6].retrieve(rec_ind)
-            if self.locked_for_read(key):
+            thread_num = self.table.lock_manager.lock_recs[key][1]
+            if self.locked_for_read(key) and thread_num != threading.get_ident():
                 return None
             if rec_RID in indirection.keys():
                 record = self.get_updated_values(key, query_columns, base_page)
@@ -380,44 +390,28 @@ class Query:
     Returns True if update is succesful
     Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
-    # def update(self, key, *columns):
-    #     # get base page & pin -- adds to bufferpool
-    #     write_lock = self.locked_for_write(key)
-    #     lock_manager = self.table.lock_manager.lock_recs
-    #     if write_lock and threading.get_ident() != lock_manager[key][1]:
-    #         return False
-    #
-    #     buffer_lock.acquire()
-    #     base_page = self.get_from_disk(key=key)
-    #     base_page.isPinned += 1
-    #     buffer_lock.release()
-    #     # Get tail page -- adds to bufferpool
-    #     tail_page = self.get_tail_page(base_page, key, False, *columns)
-    #     if tail_page == None:
-    #         return False
-    #     success = self.update_tail_page(base_page, tail_page, key, *columns)
-    #     if not success:
-    #         return False
-    #     base_page.isPinned -= 1
-    #     base_page.dirty     = True
-    #     if base_page.full():
-    #         if tail_page.path not in self.buffer_pool.merge_tails:
-    #             self.buffer_pool.merge_tails.append(tail_page.path)
-    #         if base_page.path not in self.buffer_pool.merge_bases:
-    #             self.buffer_pool.merge_bases.append(base_page.path)
-    #     self.table.merge_count += 1
-    #     if self.table.merge_count == self.table.merge_frequency:
-    #         threading.Thread(target=self.buffer_pool.merge()).start()
-    #     return True
     def update(self, key, *columns):
         # get base page & pin -- adds to bufferpool
+        write_lock = self.locked_for_write(key)
+        lock_manager = self.table.lock_manager.lock_recs
+        if write_lock and threading.get_ident() != lock_manager[key][1]:
+            return False
+
+        # buffer_lock.acquire()
         base_page = self.get_from_disk(key=key)
         base_page.isPinned += 1
         # Get tail page -- adds to bufferpool
         tail_page = self.get_tail_page(base_page, key, False, *columns)
-        self.update_tail_page(base_page, tail_page, key, *columns)
+        if tail_page == None:
+            buffer_lock.release()
+            return False
+        success = self.update_tail_page(base_page, tail_page, key, *columns)
+        tail_page.dirty = True
+        # buffer_lock.release()
+        if not success:
+            return False
         base_page.isPinned -= 1
-        base_page.dirty    = True
+        base_page.dirty     = True
         if base_page.full():
             if tail_page.path not in self.buffer_pool.merge_tails:
                 self.buffer_pool.merge_tails.append(tail_page.path)
@@ -425,8 +419,7 @@ class Query:
                 self.buffer_pool.merge_bases.append(base_page.path)
         self.table.merge_count += 1
         if self.table.merge_count == self.table.merge_frequency:
-            merge_thread = threading.Thread(target=self.buffer_pool.merge())
-            merge_thread.start()
+            threading.Thread(target=self.buffer_pool.merge()).start()
         return True
 
     ### ******* Update Helpers ******* ###
@@ -437,29 +430,48 @@ class Query:
         set pointer in indirection to prev tail record
     '''
     def update_tail_page(self, base_page, tail_page, key, *columns):
+        # print("buffer_lock1")
+        # buffer_lock.acquire()
+        # print("buffer_lock1 acquired")
         tail_page.isPinned += 1
-        rec_ind       = self.buffer_pool.meta_data.key_dict[key][3]
-        base_rec_RID       = base_page.pages[1].retrieve(rec_ind)
-        base_indirection   = base_page.pages[0]
+        rec_ind          = self.buffer_pool.meta_data.key_dict[key][3]
+        base_rec_RID     = base_page.pages[1].retrieve(rec_ind)
+        base_indirection = base_page.pages[0]
         new_schema = copy.copy(base_page.pages[3][rec_ind])
         old_schema = base_page.pages[3][rec_ind]
         # query_cols = self.get_query_cols(key, *columns)
         query_cols = self.update_schema(new_schema, *columns)
         prev_tail_values = []
+        tail_rec_ind = tail_page.num_records
+        tail_path    = tail_page.path
+        tail_schema  = query_cols
+        thread_num   = threading.get_ident()
         # check if base record has been updated previously, if it has then grab the values from the previous update.
         if base_rec_RID in base_indirection.keys():
             prev_tail_values = self.get_prev_tail(key, rec_ind, base_rec_RID, base_page, *columns) # base_rec_RID, base_indirection)
+        else:
+            prev_tail_values = [MAX_INT]*self.table.num_columns
         # If first update for any column, save snapshot
         if not np.array_equal(old_schema, new_schema):
+            if tail_page.full():
+                tail_page.isPinned -= 1
+                pr_num    = base_page.path.split("/")[4][2:]
+                tail_path = './template/%s/'%(self.table.path) + self.table.name + '/PR' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
+                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
+                tail_page.isPinned +=1
             self.create_snapshot(old_schema, new_schema, rec_ind, base_page, tail_page)
             # if full after creating snapshot
             if tail_page.full():
                 tail_page.isPinned -= 1
                 pr_num    = base_page.path.split("/")[4][2:]
                 tail_path = './template/%s/'%(self.table.path) + self.table.name + '/PR' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
-                tail_page = self.createConceptualPage(tail_path, True, *columns)
-                tail_page.isPinned -=1
-            tail_page = self.create_tail(new_schema, prev_tail_values, tail_page, *columns)
+                tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
+                tail_page.isPinned +=1
+            if not rec_ind in base_indirection.keys():
+                base_indir_val = tail_path, tail_rec_ind, thread_num
+            else:
+                base_indir_val = base_indirection[rec_ind]
+            tail_page = self.create_tail(new_schema, prev_tail_values, tail_page, tail_rec_ind, tail_schema, base_indir_val, *columns)
         else: #If we don't create a snapshot
             # If full, create new tail page
             if tail_page.full():
@@ -468,8 +480,15 @@ class Query:
                 tail_path = './template/%s/'%(self.table.path) + self.table.name + '/PR' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
                 tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                 tail_page.isPinned += 1
-            tail_page = self.create_tail(new_schema, prev_tail_values, tail_page, *columns)
+            if not rec_ind in base_indirection.keys():
+                base_indir_val = tail_path, tail_rec_ind, thread_num
+            else:
+                base_indir_val = base_indirection[rec_ind]
+            tail_page = self.create_tail(new_schema, prev_tail_values, tail_page, tail_rec_ind, tail_schema, base_indir_val, *columns)
 
+        tail_page.dirty     = True
+        # print('buffer_lock1 released')
+        # buffer_lock.release()
         base_page.pages[3][rec_ind] = new_schema
         tail_rec_ind     = tail_page.num_records - 1
         tail_path        = tail_page.path
@@ -499,54 +518,55 @@ class Query:
                 return False
         tail_page.num_records += 1
         self.buffer_pool.meta_data.tailRID_count += 1
+        tail_page.dirty = True
         return True
 
 
-    def create_tail(self, new_schema, prev_tail_values, tail_page, *columns):
-        for i, val in enumerate(new_schema):
-            # If page has update at column i
-            if val == 1:
-                if columns[i] == None:
-                    # Set value to prev tail page value
-                    tail_page.pages[i+6].write(prev_tail_values[i])
-                else:
-                    # Set value to updated value
-                    tail_page.pages[i+6].write(columns[i])
-            else:
-                # Set value to None/MaxInt
-                tail_page.pages[i+6].write(MAX_INT)
-        # UPDATE schema_col
-        tail_page.num_records += 1
-        self.buffer_pool.meta_data.tailRID_count += 1
-        return tail_page
-    # '''
-    #     Writes tail record to tail page
-    # '''
-    # #tail_schema is query_cols
-    # def create_tail(self, new_schema, prev_tail_values, tail_page, tail_rec_ind, tail_schema, base_indir_val, *columns):
+    # def create_tail(self, new_schema, prev_tail_values, tail_page, *columns):
     #     for i, val in enumerate(new_schema):
     #         # If page has update at column i
     #         if val == 1:
     #             if columns[i] == None:
     #                 # Set value to prev tail page value
-    #                 success = tail_page.pages[i+6].write(prev_tail_values[i])
+    #                 tail_page.pages[i+6].write(prev_tail_values[i])
     #             else:
     #                 # Set value to updated value
-    #                 success = tail_page.pages[i+6].write(columns[i])
+    #                 tail_page.pages[i+6].write(columns[i])
     #         else:
     #             # Set value to None/MaxInt
-    #             success = tail_page.pages[i+6].write(MAX_INT)
-    #         if not success:
-    #             return None
-    #
-    #     # UPDATE schema_col & Indirection Here
-    #     # Set tail_indirection to be old
-    #
-    #     tail_page.pages[0][tail_rec_ind] = base_indir_val
-    #     tail_page.pages[3].append(tail_schema)
-    #     self.buffer_pool.meta_data.tailRID_count += 1
+    #             tail_page.pages[i+6].write(MAX_INT)
+    #     # UPDATE schema_col
     #     tail_page.num_records += 1
+    #     self.buffer_pool.meta_data.tailRID_count += 1
     #     return tail_page
+    '''
+        Writes tail record to tail page
+    '''
+    #tail_schema is query_cols
+    def create_tail(self, new_schema, prev_tail_values, tail_page, tail_rec_ind, tail_schema, base_indir_val, *columns):
+        for i, val in enumerate(new_schema):
+            # If page has update at column i
+            if val == 1:
+                if columns[i] == None:
+                    # Set value to prev tail page value
+                    success = tail_page.pages[i+6].write(prev_tail_values[i])
+                else:
+                    # Set value to updated value
+                    success = tail_page.pages[i+6].write(columns[i])
+            else:
+                # Set value to None/MaxInt
+                success = tail_page.pages[i+6].write(MAX_INT)
+            if not success:
+                return None
+
+        # UPDATE schema_col & Indirection Here
+        # Set tail_indirection to be old
+
+        tail_page.pages[0][tail_rec_ind] = base_indir_val
+        tail_page.pages[3].append(tail_schema)
+        self.buffer_pool.meta_data.tailRID_count += 1
+        tail_page.num_records += 1
+        return tail_page
     '''
     :param start_range: int         # Start of the key range to aggregate
     :param end_range: int           # End of the key range to aggregate
@@ -580,11 +600,11 @@ class Query:
         - Returns values so it is easier to process
     '''
     def get_prev_tail(self, key, rec_ind, base_rid, base_page, *columns):
+        prev_tail_pg     = self.get_tail_page(base_page, key, True, *columns)
         base_rec_RID     = base_page.pages[1].retrieve(rec_ind)
         base_indirection = base_page.pages[0]
         prev_tail_path, prev_tail_rec_ind, _ = base_indirection[base_rid]
         prev_tail_values = []
-        prev_tail_pg     = self.get_tail_page(base_page, key, True, *columns)
         prev_tail_pg.isPinned += 1
         for i in range(len(columns)):
             prev_tail_values.append(prev_tail_pg.pages[6+i].retrieve(prev_tail_rec_ind))
@@ -604,6 +624,7 @@ class Query:
         # Check through every base page & their records
         for path in file_paths:
             # get base page from path
+            # print("buffer_lock11")
             buffer_lock.acquire()
             cpage = self.get_from_disk(path=path)
             cpage.isPinned += 1
@@ -631,7 +652,7 @@ class Query:
         returns paths
     '''
     def get_base_paths(self):
-        regex = re.compile("./template/%s/%s/PR[0-9]+/BP[0-9]+"%(self.table.path,self.table.name))
+        regex   = re.compile("./template/%s/%s/PR[0-9]+/BP[0-9]+"%(self.table.path,self.table.name))
         rootdir = './template/%s/'%self.table.path
         file_paths = []
         seen = []
@@ -699,6 +720,7 @@ class Query:
         updated = rec_RID in indirection.keys() and b_schema[col_ind] == 1
         if updated:
             tail_path, tail_rec_ind = indirection[rec_RID]
+            # print("buffer_lock12")
             buffer_lock.acquire()
             tail_page = self.get_from_disk(path=tail_path)
             buffer_lock.release()
@@ -761,6 +783,7 @@ class Query:
         - if prev = False, return new tail if prev is full
     '''
     def get_tail_page(self, base_page, key, prev, *columns):
+        # buffer_lock.acquire()
         base_page.isPinned += 1
         indirection  = base_page.pages[0]
         base_rec_ind = self.buffer_pool.meta_data.key_dict[key][3] # record num in bp
@@ -775,28 +798,32 @@ class Query:
             tail_path = './template/%s/'%(self.table.path) + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count//512))
         # if tail not in buffer, get from file and add to buffer_pool. Else just grab from buffer_pool
         # lock object
-        buffer_lock.acquire()
+        # print("buffer_lock13")
         tail_page, is_in_buffer = self.in_buffer(tail_path)
         if not is_in_buffer:
             # The first tail page for the table should create a new one
             if not self.buffer_pool.first:
                 if self.tail_in_indirection(tail_path, indirection):
-                    tail_page = self.get_from_disk(key, tail_path)
+                    # print(tail_path)
+                    tail_page = self.get_from_disk(tail_path, key)
                     # prev = false for new tail page full & not looking for prev tail values
                     if tail_page.full() and prev == False:
-                        tail_page = self.new_tail_page(pr_num)
+                        # print("New_page_page")
+                        tail_page = self.new_tail_page(pr_num, *columns)
                 else:
                     tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
                     self.add_meta(tail_page)
             else:
                 # the first page -- create & add to buffer_pool
                 self.buffer_pool.first = False
-                tail_page = self.new_tail_page(pr_num)
+                # print("New_page_page")
+                tail_page = self.new_tail_page(pr_num, *columns)
         else:
             if tail_page.full() and prev == False:
-                tail_page = self.new_tail_page(pr_num)
+                # print("New_page_page")
+                tail_page = self.new_tail_page(pr_num, *columns)
         # unlock object
-        buffer_lock.release()
+        # buffer_lock.release()
         base_page.isPinned -= 1
         return tail_page
 
@@ -811,22 +838,30 @@ class Query:
                 raise TypeError("Key value is None: get_from_disk()")
             location = self.buffer_pool.meta_data.key_dict[key]
             path     = './template/%s/'%(self.table.path) +self.table.name+'/PR'+str(location[0])+'/BP'+str(location[1])
+        # print("getfrdsk lock")
+        buffer_lock.acquire()
+        # print("getfrdsk lock acquired")
         # if not in buffer, grab from disk
         cpage, is_in_buffer = self.in_buffer(path)
         # print("thread_num, is_in_buffer: ", threading.get_ident(), is_in_buffer)
         if not is_in_buffer:
-            with open(path, 'rb') as db_file:
+            with open(path, 'r+b') as db_file:
                 cpage = pickle.load(db_file)
+
             self.buffer_pool.addConceptualPage(cpage)
+        cpage.isPinned += 1
+        # print("getfrdsk lock released")
+        buffer_lock.release()
         return cpage
 
     '''
         Creates new tail page from meta_data path & add to buffer_pool
     '''
-    def new_tail_page(self, pr_num):
+    def new_tail_page(self, pr_num, *columns):
         tail_path = './template/%s/'%(self.table.path)  + self.table.name + '/' + str(pr_num) + '/TP' + str((self.buffer_pool.meta_data.tailRID_count // 512))
         tail_page, is_in_buffer = self.in_buffer(tail_path)
         if not is_in_buffer:
+            # tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *columns)
             tail_page = self.buffer_pool.createConceptualPage(tail_path, True, *[None]*self.table.num_columns)
         self.add_meta(tail_page)
         return tail_page
