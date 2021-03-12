@@ -2,6 +2,9 @@ from template.table import Table, Record
 from template.index import Index
 from template.logger import Logger
 import threading, copy
+import time
+
+
 
 class Transaction:
 
@@ -14,6 +17,9 @@ class Transaction:
         self.logger      = Logger()
         self.query_obj   = None
         self.completed_t = {}
+        self.first_update = True
+        self.first_select = True
+        self.first_insert = True
 
     """
     # Adds the given query to this transaction
@@ -28,7 +34,7 @@ class Transaction:
     # If you choose to implement this differently this method must still return True if transaction commits or False on abort
     def run(self, query_obj):
         self.query_obj = query_obj
-        trans_num = threading.get_ident()
+        trans_num = threading.current_thread().ident
         for query, *args in self.queries:
             query_type = query.__name__
             if query_type == "sum":
@@ -38,16 +44,32 @@ class Transaction:
                 # Args[0] == key, also (value != key) sometimes
                 # self.query_obj.table.lock_manager.add_lock(args[0],"Read",trans_num)
                 # Logs value & column
+                if self.first_select:
+                    self.first_select = False
+                    print("starting select")
                 log_msg = "%i, %s, %i, %i\n"%(trans_num, query_type, args[0], args[1])
             else:
-                self.query_obj.table.lock_manager.add_lock(args[0], "Write", trans_num)
+                if query_type == "insert" and self.first_insert:
+                    self.first_insert = False
+                    print("starting insert")
+                if query_type == "update" and self.first_update:
+                    self.first_update = False
+                    print("starting update")
+                # if query_type == "insert":
+                #     print("insert: ", trans_num, *args)
+                # else:
+                #     print("update: ", trans_num, *args)
+                # self.query_obj.table.lock_manager.add_lock(args[0], "Write", threading.current_thread().ident)
                 log_msg = "%i, %s, %i\n"%(trans_num, query_type, args[0])
             self.logger.write_log(log_msg)
             result = query(*args)
+
             # Log query success
             # If the query has failed the transaction should abort
             if result == False:
                 # note where we failed
+                print("\n\n---ABORT---\n\n")
+                print("aborted", query_type," : ", trans_num, *args)
                 return self.abort()
         log_msg = "%i, Transaction Complete\n"%trans_num
         self.logger.write_log(log_msg)
@@ -260,17 +282,7 @@ class Transaction:
         # 3. Write to disk
     # Release your locks on that transaction num
     def commit(self):
-        # print("\n\n--- Committing --- \n\n")
-        lock_manager = self.query_obj.table.lock_manager.lock_recs
-        buffer_pool  = self.query_obj.table.buffer_pool
-        trans_num    = threading.get_ident()
-        popped_keys  = []
-        for key in lock_manager.keys():
-            if lock_manager[key][1] == trans_num:
-                popped_keys.append(key)
-        while popped_keys:
-            lock_manager.pop(popped_keys.pop())
-        return True
+        self.query_obj.table.lock_manager.release_locks()
 
 
 '''

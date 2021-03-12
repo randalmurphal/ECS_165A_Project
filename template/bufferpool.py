@@ -4,6 +4,7 @@ from template.conceptual_page import ConceptualPage
 import math, threading, os, pickle, copy
 import numpy as np
 MAX_INT = int(math.pow(2, 63) - 1)
+evict_lock = threading.Lock()
 
 #we probably want meta data to be stored in the files
 class MetaData():
@@ -80,7 +81,9 @@ class BufferPool():
         - Writes to disk if page is dirty, else just remove from buffer
     '''
     def evict(self):   #evict a physical page from bufferpool (LRU)
-        print("\n\n --- EVICT --- \n\n")
+        # print("evict lock")
+        evict_lock.acquire()
+        # print("evict lock acquired")
         i = 0
         cpage = self.conceptual_pages[i]
         # Loop through until finds an unpinned page
@@ -90,14 +93,17 @@ class BufferPool():
                 i = 0
             cpage = self.conceptual_pages[i]
         cpage = self.conceptual_pages.pop(i) # remove and store unpinned cpage
-        cpage.isPinned -= 1
         self.remove_key(cpage)
         # if changes to write, page is dirty
-        if cpage.dirty:
-            path = cpage.path
-            cpage.dirty = False
-            with open(path, 'wb') as db_file:
-                pickle.dump(cpage, db_file)
+        # if cpage.dirty:
+        path = cpage.path
+        cpage.dirty = False
+        cpage.isPinned = 0
+        with open(path, 'wb') as db_file:
+            pickle.dump(cpage, db_file)
+        # print("\n\n --- EVICT DONE --- thread: %s \n\n"%threading.get_ident())
+        # print("evict lock released")
+        evict_lock.release()
 
     # '''
     #     Removes a page from bufferpool when aborting
@@ -108,7 +114,11 @@ class BufferPool():
         for i, page in enumerate(self.conceptual_pages):
             if page.path == key:
                 self.remove_key(page)
-                self.conceptual_pages.pop(i)
+                cpage = self.conceptual_pages.pop(i)
+                cpage.dirty = False
+                cpage.isPinned = 0
+                with open(cpage.path, 'wb') as db_file:
+                    pickle.dump(cpage, db_file)
                 return
 
 
@@ -116,6 +126,8 @@ class BufferPool():
         Close: evicts all cpages from buffer_pool
     '''
     def close(self):
+        print("\n\n --- CLOSING --- \n\n")
+
         buf_keys = copy.deepcopy(self.buffer_keys)
         for key in buf_keys.keys():
             self.close_evict(key)
