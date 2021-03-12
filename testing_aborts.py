@@ -6,9 +6,13 @@ from template.config import init
 import threading, time
 from random import choice, randint, sample, seed
 
+
 '''
-    Different than original tester bc uses same query object for all
-        transactions
+    - When testing aborts here, must add "thread.join()" before the return in transaction_worker.py
+    - Also need to set the trans_num in query.locked_for_read/write to
+        "trans_num = self.trans_num" instead of what is there currently
+    - Add counter to transaction_worker.run && transaction.run params
+        and uncomment self.counter = counter
 '''
 
 init()
@@ -42,55 +46,37 @@ for i in range(num_threads):
     transaction_workers[i].add_transaction(select_transactions[i])
     transaction_workers[i].add_transaction(update_transactions[i])
 worker_keys = [ {} for t in transaction_workers ]
-
 query = Query(grades_table)
-for i in range(0, 10000):
+
+for i in range(8):
     key = 92106429 + i
     keys.append(key)
-    i = i % num_threads
     records[key] = [key, randint(i * 20, (i + 1) * 20), randint(i * 20, (i + 1) * 20), randint(i * 20, (i + 1) * 20), randint(i * 20, (i + 1) * 20)]
     insert_transactions[i].add_query(query.insert, *records[key])
     worker_keys[i][key] = True
+    print("insert: ", records[key])
 
-t = 0
-_records = [records[key] for key in keys]
-for c in range(grades_table.num_columns):
-    _keys = sorted(list(set([record[c] for record in _records])))
-    index = {v: [record for record in _records if record[c] == v] for v in _keys}
-    for key in _keys:
-        found = True
-        for record in index[key]:
-            if record[0] not in worker_keys[t % num_threads]:
-                found = False
-        if found:
-            select_transactions[t % num_threads].add_query(query.select, key, c, [1, 1, 1, 1, 1])
-        t += 1
+a = 0
+for i in range(8):
+    key = 92106429 + i
+    updated_columns = [key, None, None, None, None]
+    value = randint(0, 20)
+    updated_columns[1] = value
+    records[key][1]    = value
+    a += 1
+    if a == 8:
+        a = 0
+    update_transactions[a].add_query(query.update, key, *updated_columns)
+    print("update: ", updated_columns)
+    updated_columns = [None, None, None, None, None]
 
-for j in range(0, num_threads):
-    for key in worker_keys[j]:
-        updated_columns = [None, None, None, None, None]
-        for i in range(1, grades_table.num_columns):
-            value = randint(0, 20)
-            updated_columns[i] = value
-            records[key][i] = value
-            update_transactions[j].add_query(query.update, key, *updated_columns)
-            updated_columns = [None, None, None, None, None]
+counter = 0
 
 for transaction_worker in transaction_workers:
-    transaction_worker.run()
+    transaction_worker.run(counter)
+    counter += 1
 
-while threading.active_count() != 1:
-    time.sleep(1)
+# while threading.active_count() != 1:
+while threading.active_count() > 4:
+    # time.sleep(1)
     pass
-
-score = len(keys)
-for key in keys:
-    correct = records[key]
-    query = Query(grades_table)
-    result = query.select(key, 0, [1, 1, 1, 1, 1])[0].columns
-    if correct != result:
-        print('select error on primary key', key, ':', result, ', correct:', correct)
-        score -= 1
-print('Score', score, '/', len(keys))
-
-db.close()

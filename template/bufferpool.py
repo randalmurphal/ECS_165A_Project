@@ -56,7 +56,6 @@ class BufferPool():
     def addConceptualPage(self, conceptualPage):
         # evict until space in buffer
         if len(self.conceptual_pages) >= self.max_capacity:
-            # print("\n\nlen cpage: %i\n\n"%len(self.conceptual_pages))
             self.evict()
         self.add_key(conceptualPage) # add page path to buffer_keys
         self.conceptual_pages.append(conceptualPage)
@@ -80,10 +79,8 @@ class BufferPool():
         - Loops through to find first page not pinnex (waits until finds one)
         - Writes to disk if page is dirty, else just remove from buffer
     '''
-    def evict(self):   #evict a physical page from bufferpool (LRU)
-        # print("evict lock")
+    def evict(self):   # evict a physical page from bufferpool (LRU)
         evict_lock.acquire()
-        # print("evict lock acquired")
         i = 0
         cpage = self.conceptual_pages[i]
         # Loop through until finds an unpinned page
@@ -94,21 +91,12 @@ class BufferPool():
             cpage = self.conceptual_pages[i]
         cpage = self.conceptual_pages.pop(i) # remove and store unpinned cpage
         self.remove_key(cpage)
-        # if changes to write, page is dirty
-        # if cpage.dirty:
         path = cpage.path
         cpage.dirty = False
         cpage.isPinned = 0
         with open(path, 'wb') as db_file:
             pickle.dump(cpage, db_file)
-        # print("\n\n --- EVICT DONE --- thread: %s \n\n"%threading.get_ident())
-        # print("evict lock released")
         evict_lock.release()
-
-    # '''
-    #     Removes a page from bufferpool when aborting
-    # '''
-    # def remove(self):
 
     def close_evict(self, key):
         for i, page in enumerate(self.conceptual_pages):
@@ -121,13 +109,10 @@ class BufferPool():
                     pickle.dump(cpage, db_file)
                 return
 
-
     '''
         Close: evicts all cpages from buffer_pool
     '''
     def close(self):
-        print("\n\n --- CLOSING --- \n\n")
-
         buf_keys = copy.deepcopy(self.buffer_keys)
         for key in buf_keys.keys():
             self.close_evict(key)
@@ -144,10 +129,6 @@ class BufferPool():
     def add_key(self, conceptual_page):
         self.buffer_keys[conceptual_page.path] = conceptual_page
 
-    # # Returns base & tail pages for merging
-    # def id_merge_pages(self):
-    #     pass
-
     def get_base_pages(self):
         base_pages = []
         for i, path in enumerate(self.merge_bases):
@@ -156,7 +137,6 @@ class BufferPool():
                 with open(path, "rb") as db_file:
                     base_page = pickle.load(db_file)
             base_pages.append(base_page)
-
         return base_pages
 
     def get_tail_pages(self, base_page):
@@ -175,7 +155,6 @@ class BufferPool():
         tail_page_objs = tail_pages
         tail_page_values = []
         new_base_page.pages[1]
-        # baseRID:(tail_path,tail_RID)
         # go through each
         for base_rec_num in range(new_base_page.num_records):
             base_rec_RID = new_base_page.pages[1].retrieve(base_rec_num)
@@ -196,7 +175,6 @@ class BufferPool():
                         else:
                             new_value = tail_page.pages[k+6].retrieve(tail_rec_ind)
                             new_base_page.pages[k+6].overWrite(new_value, base_rec_num)
-
         return new_base_page
 
     def set_new_path(self,base_page,merge_num):
@@ -235,7 +213,6 @@ class BufferPool():
             to the keys in the new_base_page and replace path
     '''
     def merge(self):
-        # print("begin merge")
         base_pages = self.get_base_pages()
         i = 0
         for base_page in base_pages:
@@ -249,7 +226,6 @@ class BufferPool():
             self.change_dict_vals(new_base, new_base_path)
             self.merge_bases.pop(i)
             base_page.merge_num += 1
-        # print("end merge")
         return
 
     '''

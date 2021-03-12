@@ -12,6 +12,7 @@ class Database():
     def close(self):  #put everything in bufferpool back to disk
         while self.tables:
             table = self.tables.pop(0)
+            table.lock_manager.release_locks()
             t_path = './template/%s/%s/table'%(self.path,table.name)
             table.buffer_pool.close() # evict all
             # Store table in file (with bufferpool in it)

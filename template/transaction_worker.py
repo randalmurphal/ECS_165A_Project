@@ -12,6 +12,7 @@ class TransactionWorker:
         self.transactions = []
         self.result = 0
         self.query_obj = None
+        # self.counter = 0
 
     """
     Appends t to transactions
@@ -32,6 +33,7 @@ class TransactionWorker:
     Runs a transaction
     """
     def run(self):
+        # self.counter = counter
         self.query_obj = self.transactions[0].queries[0][0].__self__
         thread = threading.Thread(target=self.run_transaction)
         thread.start()
